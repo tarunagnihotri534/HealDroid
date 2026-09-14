@@ -1478,6 +1478,16 @@ function RulesScreen() {
 }
 
 // ── ROOT ──────────────────────────────────────────────────────────────────────
+const NAV_SCREENS: Screen[] = ["upload", "processing", "report", "findings", "rules"];
+
+const NAV_ITEMS = [
+  { icon: Upload,   label: "Scan" },
+  { icon: Activity, label: "Process" },
+  { icon: FileText, label: "Report" },
+  { icon: List,     label: "Findings" },
+  { icon: BookOpen, label: "Rules" },
+];
+
 export default function App() {
   const [navIdx,       setNavIdx]       = useState(0);
   const [selected,     setSelected]     = useState<FindingItem | null>(null);
