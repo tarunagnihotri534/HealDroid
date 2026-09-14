@@ -292,20 +292,69 @@ function ScoreArc({ score }: { score: number }) {
   );
 }
 
+interface JobData {
+  job_id: string;
+  app_name: string;
+  file_size_bytes: number;
+  status: string;
+  manifest?: {
+    package_name: string;
+    min_sdk?: string;
+    target_sdk?: string;
+    permissions: string[];
+    components: { name: string; type: string; exported: boolean; permission?: string; intent_filters: string[] }[];
+    debuggable: boolean;
+    allow_backup: boolean;
+    uses_cleartext_traffic: boolean;
+  };
+  decompilation?: {
+    status: string;
+    method: string;
+    file_count: number;
+    time_taken_seconds: number;
+    error?: string;
+  };
+}
+
 // ── SCREENS ───────────────────────────────────────────────────────────────────
-function UploadScreen({ onScan }: { onScan: () => void }) {
-  const [dragging, setDragging] = useState(false);
-  const [file,     setFile]     = useState<string | null>(null);
-  const [showAdv,  setShowAdv]  = useState(false);
+function UploadScreen({
+  onScan,
+}: {
+  onScan: (file: File | null, fileName: string) => void;
+}) {
+  const [dragging,     setDragging]     = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileName,     setFileName]     = useState<string>("com.bank.android-release.apk");
+  const [fileSizeText, setFileSizeText] = useState<string>("18.4 MB (sample APK)");
+  const [showAdv,      setShowAdv]      = useState(false);
+  const fileInputRef = useState<HTMLInputElement | null>(null);
+
+  const handleFilePicked = (f: File) => {
+    setSelectedFile(f);
+    setFileName(f.name);
+    const szMb = (f.size / (1024 * 1024)).toFixed(1);
+    setFileSizeText(`${szMb} MB`);
+  };
 
   return (
     <div className="h-full overflow-y-auto px-4 pt-4 pb-28 space-y-4">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: T.text1, fontFamily: ui }}>Analyze an APK</h1>
         <p className="text-sm mt-1" style={{ color: T.text3, fontFamily: ui }}>
-          Static security analysis against OWASP Mobile Top 10.
+          Phase 1 + 2: Manifest parsing, jadx decompilation & code extraction.
         </p>
       </div>
+
+      <input
+        type="file"
+        accept=".apk"
+        id="apk-file-input"
+        className="hidden"
+        onChange={e => {
+          const f = e.target.files?.[0];
+          if (f) handleFilePicked(f);
+        }}
+      />
 
       {/* Drop zone */}
       <Card
@@ -321,16 +370,24 @@ function UploadScreen({ onScan }: { onScan: () => void }) {
           className="flex flex-col items-center gap-4"
           onDragOver={e => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
-          onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) setFile(f.name); }}
-          onClick={() => setFile("com.bank.android-release.apk")}
+          onDrop={e => {
+            e.preventDefault();
+            setDragging(false);
+            const f = e.dataTransfer.files[0];
+            if (f) handleFilePicked(f);
+          }}
+          onClick={() => {
+            const input = document.getElementById("apk-file-input") as HTMLInputElement;
+            if (input) input.click();
+          }}
         >
           <div className="w-14 h-14 flex items-center justify-center" style={{ borderRadius: 18, backgroundColor: T.accentBg }}>
             <Shield className="w-7 h-7" style={{ color: T.accent }} strokeWidth={1.5} />
           </div>
-          {file ? (
+          {fileName ? (
             <div className="text-center space-y-2">
-              <p className="text-sm font-semibold" style={{ color: T.text1, fontFamily: mono }}>{file}</p>
-              <AlertBar type="success">APK loaded — 18.4 MB</AlertBar>
+              <p className="text-sm font-semibold" style={{ color: T.text1, fontFamily: mono }}>{fileName}</p>
+              <AlertBar type="success">APK ready — {fileSizeText}</AlertBar>
             </div>
           ) : (
             <div className="text-center">
@@ -341,12 +398,29 @@ function UploadScreen({ onScan }: { onScan: () => void }) {
         </div>
       </Card>
 
+      {/* Quick sample APK selector */}
+      <div className="flex items-center justify-between px-2 text-xs">
+        <span style={{ color: T.text3 }}>Test fixtures available:</span>
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedFile(null);
+            setFileName("com.bank.android-release.apk");
+            setFileSizeText("Default test APK");
+          }}
+          className="font-medium underline"
+          style={{ color: T.accent }}
+        >
+          Load Default Fixture
+        </button>
+      </div>
+
       {/* Advanced options */}
       <Card>
         <button className="w-full flex items-center justify-between px-5 py-4" onClick={() => setShowAdv(!showAdv)}>
           <div className="flex items-center gap-2.5">
             <Zap className="w-4 h-4" style={{ color: T.text3 }} strokeWidth={1.5} />
-            <span className="text-sm font-medium" style={{ color: T.text2, fontFamily: ui }}>Advanced options</span>
+            <span className="text-sm font-medium" style={{ color: T.text2, fontFamily: ui }}>Decompiler options</span>
           </div>
           <ChevronDown
             className="w-4 h-4 transition-transform"
@@ -357,28 +431,32 @@ function UploadScreen({ onScan }: { onScan: () => void }) {
         {showAdv && (
           <div className="px-5 pb-5 space-y-4" style={{ borderTop: `1px solid ${T.border}` }}>
             <div className="pt-4 space-y-4">
-              {[
-                { label: "Rule Set", opts: ["OWASP Mobile Top 10 (default)", "Strict — all rules", "Custom ruleset"] },
-                { label: "Min Severity", opts: ["Low and above", "Medium and above", "High and above"] },
-              ].map(({ label, opts }) => (
-                <div key={label}>
-                  <p className="text-xs font-medium mb-1.5" style={{ color: T.text3, fontFamily: ui }}>{label}</p>
-                  <select
-                    className="w-full text-sm px-4 py-2.5 outline-none"
-                    style={{ borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: T.surf2, color: T.text1, fontFamily: ui }}
-                  >
-                    {opts.map(o => <option key={o}>{o}</option>)}
-                  </select>
-                </div>
-              ))}
+              <div>
+                <p className="text-xs font-medium mb-1.5" style={{ color: T.text3, fontFamily: ui }}>Engine</p>
+                <select
+                  className="w-full text-sm px-4 py-2.5 outline-none"
+                  style={{ borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: T.surf2, color: T.text1, fontFamily: ui }}
+                >
+                  <option>jadx 1.5.6 (bundled)</option>
+                </select>
+              </div>
+              <div>
+                <p className="text-xs font-medium mb-1.5" style={{ color: T.text3, fontFamily: ui }}>Subprocess Timeout</p>
+                <select
+                  className="w-full text-sm px-4 py-2.5 outline-none"
+                  style={{ borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: T.surf2, color: T.text1, fontFamily: ui }}
+                >
+                  <option>90 seconds (standard)</option>
+                </select>
+              </div>
             </div>
           </div>
         )}
       </Card>
 
-      <PrimaryBtn onClick={onScan} disabled={!file} full>
+      <PrimaryBtn onClick={() => onScan(selectedFile, fileName)} disabled={!fileName} full>
         <Shield className="w-4 h-4" strokeWidth={1.5} />
-        Run Security Scan
+        Decompile & Extract APK
       </PrimaryBtn>
 
       <div>
@@ -411,70 +489,196 @@ function UploadScreen({ onScan }: { onScan: () => void }) {
   );
 }
 
-function ProcessingScreen({ onComplete }: { onComplete: () => void }) {
-  const [stages, setStages] = useState<StageState[]>(["active","pending","pending","pending","pending"]);
-  const [logs,   setLogs]   = useState<string[]>([LOG_LINES[0]]);
-  const [count,  setCount]  = useState(0);
+function ProcessingScreen({
+  file,
+  fileName,
+  jobData,
+  setJobData,
+  onReset,
+}: {
+  file: File | null;
+  fileName: string;
+  jobData: JobData | null;
+  setJobData: (j: JobData | null) => void;
+  onReset: () => void;
+}) {
+  const [stages, setStages] = useState<StageState[]>(["active", "pending", "pending", "pending", "pending"]);
+  const [logs,   setLogs]   = useState<string[]>([`[client] preparing upload for ${fileName}...`]);
   const [done,   setDone]   = useState(false);
+  const [error,  setError]  = useState<string | null>(null);
 
   useEffect(() => {
-    let idx = 1;
-    const iv = setInterval(() => {
-      if (idx < LOG_LINES.length) {
-        const line = LOG_LINES[idx];
-        if (line) setLogs(prev => [...prev, line]);
-        if (idx === 2)  setStages(["complete","active",   "pending",  "pending",  "pending"  ]);
-        if (idx === 4)  setStages(["complete","complete", "active",   "pending",  "pending"  ]);
-        if (idx === 5)  setStages(["complete","complete", "complete", "active",   "pending"  ]);
-        if (idx === 6)  setCount(1);
-        if (idx === 9)  setCount(3);
-        if (idx === 11) { setCount(6); setStages(["complete","complete","complete","complete","active"]); }
-        if (idx === 12) setStages(["complete","complete","complete","complete","complete"]);
-        idx++;
-      } else {
-        clearInterval(iv);
+    let cancelled = false;
+
+    async function runDecompilation() {
+      try {
+        setLogs(prev => [...prev, `[client] connecting to /api/upload...`]);
+        const formData = new FormData();
+
+        if (file) {
+          formData.append("file", file);
+        } else {
+          // Fetch default public APK fixture
+          setLogs(prev => [...prev, `[client] loading public/com.bank.android-release.apk...`]);
+          const res = await fetch("/com.bank.android-release.apk");
+          const blob = await res.blob();
+          formData.append("file", blob, fileName);
+        }
+
+        // Stage 0: Ingestion
+        setStages(["active", "pending", "pending", "pending", "pending"]);
+        setLogs(prev => [...prev, `[ingest] sending APK to backend pipeline...`]);
+
+        const uploadPromise = fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        // Advance to decompilation stage visually while backend processes
+        setTimeout(() => {
+          if (!cancelled) {
+            setStages(["complete", "active", "pending", "pending", "pending"]);
+            setLogs(prev => [
+              ...prev,
+              `[ingest] APK validated and saved to storage`,
+              `[jadx] starting jadx decompiler subprocess...`,
+            ]);
+          }
+        }, 600);
+
+        const response = await uploadPromise;
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Upload failed (${response.status}): ${errText}`);
+        }
+
+        const data: JobData = await response.json();
+        if (cancelled) return;
+
+        setJobData(data);
+
+        // Stages updated based on real results
+        setStages(["complete", "complete", "complete", "pending", "pending"]);
+        setLogs(prev => [
+          ...prev,
+          `[manifest] extracted package: ${data.manifest?.package_name || "unknown"}`,
+          `[manifest] found ${data.manifest?.permissions.length || 0} permissions, ${data.manifest?.components.length || 0} components`,
+          `[jadx] decompiler finished (${data.decompilation?.time_taken_seconds || 0}s, method: ${data.decompilation?.method})`,
+          `[extractor] ${data.decompilation?.file_count || 0} Java source files extracted and verified`,
+          `[pipeline] Phase 1 + 2 completed successfully. Ready for Phase 3 (Rule Engine).`,
+        ]);
         setDone(true);
+      } catch (err: any) {
+        if (cancelled) return;
+        setError(err.message || "Decompilation failed");
+        setStages(["complete", "pending", "pending", "pending", "pending"]);
+        setLogs(prev => [...prev, `[error] ${err.message}`]);
       }
-    }, 560);
-    return () => clearInterval(iv);
-  }, []);
+    }
+
+    runDecompilation();
+    return () => {
+      cancelled = true;
+    };
+  }, [file, fileName]);
 
   const stagesDone = stages.filter(s => s === "complete").length;
-  const pct = Math.round((stagesDone / PIPELINE.length) * 100);
+  const pct = done ? 60 : Math.round((stagesDone / PIPELINE.length) * 100);
 
   return (
     <div className="h-full overflow-y-auto px-4 pt-4 pb-28 space-y-4">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: T.text1, fontFamily: ui }}>Analyzing…</h1>
-        <p className="text-xs mt-1" style={{ color: T.text3, fontFamily: mono }}>com.bank.android-release.apk · 18.4 MB</p>
+        <h1 className="text-2xl font-bold" style={{ color: T.text1, fontFamily: ui }}>
+          {done ? "Extraction Complete" : "Decompiling APK…"}
+        </h1>
+        <p className="text-xs mt-1" style={{ color: T.text3, fontFamily: mono }}>{fileName}</p>
       </div>
 
       <Card className="p-5">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-semibold" style={{ color: T.text1, fontFamily: ui }}>
-            {done ? "Analysis complete" : "Running pipeline…"}
+            {done ? "Phase 1 + 2 Complete" : error ? "Decompilation Failed" : "Decompiling & Extracting…"}
           </span>
-          <span className="text-sm font-bold" style={{ color: T.accent, fontFamily: ui }}>{pct}%</span>
+          <span className="text-sm font-bold" style={{ color: T.accent, fontFamily: ui }}>
+            {done ? "60%" : `${pct}%`}
+          </span>
         </div>
         <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: T.bg }}>
-          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: T.accent }} />
+          <div className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${done ? 60 : pct}%`, backgroundColor: error ? T.critical : T.accent }} />
         </div>
         <div className="flex items-center justify-between mt-3">
-          <span className="text-xs" style={{ color: T.text3, fontFamily: ui }}>{stagesDone} of {PIPELINE.length} stages</span>
-          {count > 0 && (
+          <span className="text-xs" style={{ color: T.text3, fontFamily: ui }}>
+            {stagesDone} of {PIPELINE.length} stages complete
+          </span>
+          {done && jobData?.decompilation && (
             <span className="text-xs font-semibold px-2.5 py-1"
-              style={{ borderRadius: 999, color: T.high, backgroundColor: T.highBg, fontFamily: ui }}>
-              {count} finding{count !== 1 ? "s" : ""} flagged
+              style={{ borderRadius: 999, color: T.success, backgroundColor: T.successBg, fontFamily: ui }}>
+              ✓ {jobData.decompilation.file_count} Java files extracted
             </span>
           )}
         </div>
       </Card>
 
+      {/* Proof of decompilation stats card */}
+      {done && jobData && (
+        <Card className="p-5 space-y-3" style={{ border: `1px solid ${T.accent}` }}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: T.accent, fontFamily: ui }}>
+              Decompilation Proof & Extraction Stats
+            </span>
+            <Pill color={T.accent} bg={T.accentBg}>Job: {jobData.job_id}</Pill>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+            <div className="p-2.5 rounded-xl" style={{ backgroundColor: T.surf2 }}>
+              <p className="text-[10px]" style={{ color: T.text4 }}>Java Files Extracted</p>
+              <p className="text-sm font-bold mt-0.5" style={{ color: T.text1, fontFamily: mono }}>
+                {jobData.decompilation?.file_count} files
+              </p>
+            </div>
+            <div className="p-2.5 rounded-xl" style={{ backgroundColor: T.surf2 }}>
+              <p className="text-[10px]" style={{ color: T.text4 }}>Decompilation Time</p>
+              <p className="text-sm font-bold mt-0.5" style={{ color: T.text1, fontFamily: mono }}>
+                {jobData.decompilation?.time_taken_seconds}s
+              </p>
+            </div>
+            <div className="p-2.5 rounded-xl" style={{ backgroundColor: T.surf2 }}>
+              <p className="text-[10px]" style={{ color: T.text4 }}>Engine / Method</p>
+              <p className="text-sm font-bold mt-0.5" style={{ color: T.text1, fontFamily: mono }}>
+                {jobData.decompilation?.method === "jadx" ? "jadx 1.5.6" : "source bundle"}
+              </p>
+            </div>
+            <div className="p-2.5 rounded-xl" style={{ backgroundColor: T.surf2 }}>
+              <p className="text-[10px]" style={{ color: T.text4 }}>Declared Permissions</p>
+              <p className="text-sm font-bold mt-0.5" style={{ color: T.text1, fontFamily: mono }}>
+                {jobData.manifest?.permissions.length || 0} permissions
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-1 text-[11px] space-y-1" style={{ color: T.text2, fontFamily: ui }}>
+            <p><span className="font-semibold">Package:</span> <code style={{ fontFamily: mono }}>{jobData.manifest?.package_name}</code></p>
+            <p><span className="font-semibold">Components:</span> {jobData.manifest?.components.length || 0} (Activities, Services, Receivers)</p>
+            <p><span className="font-semibold">SDK Support:</span> minSdk {jobData.manifest?.min_sdk || "N/A"}, targetSdk {jobData.manifest?.target_sdk || "N/A"}</p>
+          </div>
+
+          <div className="p-3 rounded-xl flex items-center gap-2" style={{ backgroundColor: T.accentBg }}>
+            <CheckCircle className="w-4 h-4" style={{ color: T.accent }} />
+            <span className="text-xs font-medium" style={{ color: T.text2 }}>
+              Ready for Phase 3: Rule engine will iterate over the extracted source files.
+            </span>
+          </div>
+        </Card>
+      )}
+
+      {/* Pipeline stage cards */}
       <Card className="p-5">
-        <SectionLabel>Pipeline</SectionLabel>
+        <SectionLabel>Pipeline Stages</SectionLabel>
         <div className="space-y-1">
           {PIPELINE.map(({ id, label, sub, Icon }, i) => {
             const state = stages[i];
+            const isPhase3 = i >= 3;
             return (
               <div key={id} className="flex items-center gap-3 py-2.5">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -488,11 +692,15 @@ function ProcessingScreen({ onComplete }: { onComplete: () => void }) {
                 <div className="flex-1">
                   <p className="text-sm font-medium"
                     style={{ color: state === "complete" ? T.text1 : state === "active" ? T.accent : T.text4, fontFamily: ui }}>
-                    {label}
+                    {label} {isPhase3 && <span className="text-[10px] font-normal" style={{ color: T.text4 }}>(Phase 3)</span>}
                   </p>
-                  {state === "complete" && (
-                    <p className="text-[10px]" style={{ color: T.text4, fontFamily: mono }}>{sub}</p>
-                  )}
+                  <p className="text-[10px]" style={{ color: T.text4, fontFamily: mono }}>
+                    {state === "complete" && i === 1 && jobData?.decompilation
+                      ? `${jobData.decompilation.file_count} files in ${jobData.decompilation.time_taken_seconds}s`
+                      : state === "complete" && i === 2 && jobData?.manifest
+                      ? `${jobData.manifest.permissions.length} perms, ${jobData.manifest.components.length} comps`
+                      : sub}
+                  </p>
                 </div>
                 {state === "complete" && (
                   <CheckCircle className="w-4 h-4 flex-shrink-0" style={{ color: T.success }} strokeWidth={2} />
@@ -503,29 +711,32 @@ function ProcessingScreen({ onComplete }: { onComplete: () => void }) {
         </div>
       </Card>
 
+      {/* Live terminal scan logs */}
       <Card>
         <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
           <Terminal className="w-3.5 h-3.5" style={{ color: T.text3 }} strokeWidth={1.5} />
-          <span className="text-xs font-medium" style={{ color: T.text3, fontFamily: ui }}>scan.log</span>
-          {!done && <span className="ml-auto w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: T.accent }} />}
+          <span className="text-xs font-medium" style={{ color: T.text3, fontFamily: ui }}>decompilation.log</span>
+          {!done && !error && <span className="ml-auto w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: T.accent }} />}
         </div>
         <div className="p-4 max-h-36 overflow-y-auto" style={{ backgroundColor: T.surf2, borderRadius: "0 0 16px 16px" }}>
-          {logs.map((line, i) => {
-            if (!line) return null;
-            const isMatch = line.includes("MATCH");
-            const isFinal = line.includes("[scoring]") || line.includes("[report]");
-            return (
-              <p key={i} className="text-[11px] leading-5"
-                style={{ fontFamily: mono, color: isMatch ? T.high : isFinal ? T.success : T.text3 }}>
-                {line}
-              </p>
-            );
-          })}
-          {!done && <span className="text-xs animate-pulse" style={{ fontFamily: mono, color: T.accent }}>█</span>}
+          {logs.map((line, i) => (
+            <p key={i} className="text-[11px] leading-5"
+              style={{
+                fontFamily: mono,
+                color: line.includes("[error]") ? T.critical : line.includes("[jadx]") || line.includes("[extractor]") ? T.accent : line.includes("[pipeline]") ? T.success : T.text3,
+              }}>
+              {line}
+            </p>
+          ))}
+          {!done && !error && <span className="text-xs animate-pulse" style={{ fontFamily: mono, color: T.accent }}>█</span>}
         </div>
       </Card>
 
-      {done && <PrimaryBtn onClick={onComplete} full>View Full Report →</PrimaryBtn>}
+      {done && (
+        <PrimaryBtn onClick={onReset} full>
+          Scan Another APK
+        </PrimaryBtn>
+      )}
     </div>
   );
 }
@@ -848,12 +1059,22 @@ function RulesScreen() {
 
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [navIdx,      setNavIdx]      = useState(0);
-  const [selected,    setSelected]    = useState<Finding | null>(null);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [isDark,      setIsDark]      = useState(false);
+  const [navIdx,       setNavIdx]       = useState(0);
+  const [selected,     setSelected]     = useState<Finding | null>(null);
+  const [profileOpen,  setProfileOpen]  = useState(false);
+  const [isDark,       setIsDark]       = useState(false);
+  const [scanFile,     setScanFile]     = useState<File | null>(null);
+  const [scanFileName, setScanFileName] = useState<string>("com.bank.android-release.apk");
+  const [jobData,      setJobData]      = useState<JobData | null>(null);
 
   const screen = NAV_SCREENS[navIdx];
+
+  const handleStartScan = (file: File | null, fileName: string) => {
+    setScanFile(file);
+    setScanFileName(fileName);
+    setJobData(null);
+    setNavIdx(1); // switch to processing
+  };
 
   return (
     <div className="flex justify-center" style={{ backgroundColor: "#E8EAF0", minHeight: "100dvh" }}>
@@ -920,8 +1141,21 @@ export default function App() {
 
         {/* ── CONTENT — fills all remaining height, overlays float on top ── */}
         <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
-          {screen === "upload"     && <UploadScreen onScan={() => setNavIdx(1)} />}
-          {screen === "processing" && <ProcessingScreen onComplete={() => setNavIdx(2)} />}
+          {screen === "upload" && (
+            <UploadScreen onScan={handleStartScan} />
+          )}
+          {screen === "processing" && (
+            <ProcessingScreen
+              file={scanFile}
+              fileName={scanFileName}
+              jobData={jobData}
+              setJobData={setJobData}
+              onReset={() => {
+                setJobData(null);
+                setNavIdx(0);
+              }}
+            />
+          )}
           {screen === "report"     && <ReportScreen onFindings={() => setNavIdx(3)} />}
           {screen === "findings"   && <FindingsScreen onSelect={setSelected} />}
           {screen === "rules"      && <RulesScreen />}

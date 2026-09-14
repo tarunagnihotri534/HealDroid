@@ -3,3 +3,8 @@ dist/
 .vite/
 *.log
 .DS_Store
+tools/jadx/
+storage/
+__pycache__/
+*.pyc
+.pytest_cache/
