@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DECOY APK — AndroidManifest.xml
+     Contains deliberate security misconfigurations for testing HealDroid scanner.
+     DO NOT use in production. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.bank.android"
+    android:versionCode="12"
+    android:versionName="3.4.1">
+
+    <!-- ⚠ VULN [APK-MANIF-002]: debuggable=true in production build -->
+    <application
+        android:label="SecureBank"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/AppTheme"
+        android:debuggable="true"
+        android:usesCleartextTraffic="true"
+        android:allowBackup="true"
+        android:networkSecurityConfig="@xml/network_security_config">
+
+        <!-- ⚠ VULN [APK-MANIF-001]: usesCleartextTraffic="true" allows HTTP -->
+
+        <!-- ⚠ VULN [APK-MANIF-003]: Exported activity without permission guard -->
+        <activity
+            android:name="com.bank.android.LoginActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name="com.bank.android.DashboardActivity"
+            android:exported="false" />
+
+        <!-- Another exported component without permission -->
+        <activity
+            android:name="com.bank.android.DeepLinkActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="securebank" android:host="transfer" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name="com.bank.android.SyncService"
+            android:exported="true" />
+
+        <receiver
+            android:name="com.bank.android.PushReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </receiver>
+
+        <provider
+            android:name="com.bank.android.UserContentProvider"
+            android:authorities="com.bank.android.provider"
+            android:exported="true"
+            android:grantUriPermissions="true" />
+
+    </application>
+
+    <!-- Permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
+
+</manifest>
