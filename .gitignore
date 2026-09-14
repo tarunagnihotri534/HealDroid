@@ -3,8 +3,9 @@ dist/
 .vite/
 *.log
 .DS_Store
-tools/jadx/
+tools/
 storage/
 __pycache__/
 *.pyc
 .pytest_cache/
+backend/tests/tmp_test_*/

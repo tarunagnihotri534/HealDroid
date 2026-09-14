@@ -4,7 +4,7 @@ import {
   X, CheckCircle, Terminal, RefreshCw, Download,
   Search, Plus, ArrowLeft, ChevronDown, Activity,
   Database, Code, AlertCircle, CheckCircle2, AlertTriangle,
-  ChevronRight, Clock, Zap,
+  ChevronRight, Clock, Zap, Layers, FileCode, Check
 } from "lucide-react";
 import { SpotlightNav } from "@/app/components/ui/spotlight-nav";
 import { ProfileSheet } from "@/app/components/ui/profile-sheet";
@@ -47,99 +47,100 @@ const SEV: Record<Severity, { color: string; bg: string; label: string }> = {
   low:      { color: T.low,      bg: T.lowBg,    label: "Low"      },
 };
 
-// ── MOCK DATA ─────────────────────────────────────────────────────────────────
-interface Finding {
-  id: string; title: string; severity: Severity; owasp: string;
-  location: string; evidence: string; remediation: string;
-  ruleId: string; source: "manifest" | "code";
-}
-interface Rule {
-  id: string; title: string; severity: Severity; owasp: string;
-  type: "manifest-attribute" | "regex"; enabled: boolean; pattern: string;
+// ── TYPES & SCHEMAS ───────────────────────────────────────────────────────────
+export interface FindingItem {
+  id: string;
+  severity: Severity;
+  title: string;
+  owasp_category: string;
+  location: string;
+  evidence: string;
+  remediation: string;
 }
 
-const FINDINGS: Finding[] = [
-  { id:"F001", severity:"critical", owasp:"M3", source:"manifest",
-    title:"Cleartext HTTP Traffic Allowed",
-    location:"AndroidManifest.xml",
-    evidence:'android:usesCleartextTraffic="true"',
-    remediation:"Set android:usesCleartextTraffic to false and configure a Network Security Configuration file to enforce HTTPS for all outbound traffic.",
-    ruleId:"APK-MANIF-001" },
-  { id:"F002", severity:"critical", owasp:"M1", source:"manifest",
-    title:"Exported Activity Without Permission",
-    location:"com.app.LoginActivity",
-    evidence:'android:exported="true"\nandroid:permission — NOT SET',
-    remediation:"Add android:permission with a signature-level permission, or set android:exported to false if external access is not required.",
-    ruleId:"APK-MANIF-003" },
-  { id:"F003", severity:"high", owasp:"M9", source:"code",
-    title:"Hardcoded API Key Detected",
-    location:"com.app.NetworkClient:L142",
-    evidence:'String apiKey = "sk-prod-a8f3b2c1d4e5f6a7b8";',
-    remediation:"Remove hardcoded credentials. Rotate the exposed key. Use encrypted keystores or environment-injected secrets at runtime.",
-    ruleId:"APK-CODE-012" },
-  { id:"F004", severity:"medium", owasp:"M5", source:"code",
-    title:"Insecure Random Number Generator",
-    location:"com.app.TokenManager:L89",
-    evidence:"new Random().nextInt(999999)",
-    remediation:"Replace java.util.Random with java.security.SecureRandom for all token and session ID generation.",
-    ruleId:"APK-CODE-008" },
-  { id:"F005", severity:"medium", owasp:"M8", source:"manifest",
-    title:"Debuggable Flag in Production Build",
-    location:"AndroidManifest.xml",
-    evidence:'android:debuggable="true"',
-    remediation:"Remove android:debuggable or set it explicitly to false in all production build variants.",
-    ruleId:"APK-MANIF-002" },
-  { id:"F006", severity:"low", owasp:"M2", source:"code",
-    title:"World-Readable External Storage",
-    location:"com.app.FileManager:L201",
-    evidence:"Environment.getExternalStorageDirectory()",
-    remediation:"Use app-private directories (getFilesDir, getCacheDir) instead of world-readable external storage.",
-    ruleId:"APK-CODE-019" },
-];
+export interface RuleItem {
+  id: string;
+  title: string;
+  severity: Severity;
+  owasp: string;
+  type: "manifest-rule" | "regex-code-rule" | "compound-rule";
+  enabled: boolean;
+  pattern: string;
+}
 
-const RULES: Rule[] = [
-  { id:"APK-MANIF-001", title:"Cleartext Traffic",    severity:"critical", owasp:"M3", type:"manifest-attribute", enabled:true,  pattern:"usesCleartextTraffic.*true"           },
-  { id:"APK-MANIF-002", title:"Debuggable Build",     severity:"medium",   owasp:"M8", type:"manifest-attribute", enabled:true,  pattern:"debuggable.*true"                     },
-  { id:"APK-MANIF-003", title:"Exported Component",   severity:"critical", owasp:"M1", type:"manifest-attribute", enabled:true,  pattern:"exported.*true"                       },
-  { id:"APK-CODE-008",  title:"Insecure RNG",         severity:"medium",   owasp:"M5", type:"regex",              enabled:true,  pattern:"new\\s+Random\\(\\)"                  },
-  { id:"APK-CODE-012",  title:"Hardcoded Credential", severity:"high",     owasp:"M9", type:"regex",              enabled:true,  pattern:"(apiKey|secret|token)\\s*=\\s*\"[^\"]+" },
-  { id:"APK-CODE-019",  title:"External Storage",     severity:"low",      owasp:"M2", type:"regex",              enabled:false, pattern:"getExternalStorageDirectory"          },
+export interface JobData {
+  job_id: string;
+  app_name: string;
+  file_size_bytes: number;
+  status: "processing" | "complete" | "failed" | "partial";
+  score: number;
+  grade: "A" | "B" | "C" | "D" | "F";
+  decompilation_incomplete: boolean;
+  decompilation_warnings: string[];
+  findings: FindingItem[];
+  summary: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  manifest?: {
+    package_name: string;
+    min_sdk?: string;
+    target_sdk?: string;
+    target_sdk_version?: number;
+    network_security_config?: string;
+    permissions: string[];
+    components: { name: string; type: string; exported: boolean; permission?: string; intent_filters: string[] }[];
+    debuggable: boolean;
+    allow_backup: boolean;
+    uses_cleartext_traffic: boolean;
+  };
+  decompilation?: {
+    status: string;
+    method: string;
+    file_count: number;
+    time_taken_seconds: number;
+    error?: string;
+    decompilation_incomplete?: boolean;
+    decompilation_warnings?: string[];
+  };
+  error?: string;
+}
+
+const DEFAULT_RULES: RuleItem[] = [
+  { id: "MANIFEST_DEBUGGABLE", title: "Debuggable Application Flag", severity: "critical", owasp: "M1", type: "manifest-rule", enabled: true, pattern: 'android:debuggable="true"' },
+  { id: "SECRET_AWS_KEY", title: "Hardcoded AWS Access Key", severity: "critical", owasp: "M9", type: "regex-code-rule", enabled: true, pattern: "AKIA[0-9A-Z]{16}" },
+  { id: "INSECURE_TRUST_ALL_CERTS", title: "Disabled TLS Certificate Validation", severity: "critical", owasp: "M3", type: "regex-code-rule", enabled: true, pattern: "checkServerTrusted | ALLOW_ALL_HOSTNAME_VERIFIER" },
+  { id: "INSECURE_WEBVIEW_JS", title: "Insecure WebView JavaScript Bridge", severity: "critical", owasp: "M1", type: "compound-rule", enabled: true, pattern: "setJavaScriptEnabled(true) + addJavascriptInterface" },
+  { id: "MANIFEST_EXPORTED_ACTIVITY", title: "Exported Activity Without Permission", severity: "high", owasp: "M1", type: "manifest-rule", enabled: true, pattern: "exported=true || intent-filter without permission" },
+  { id: "MANIFEST_CLEARTEXT_TRAFFIC", title: "Cleartext HTTP Traffic Permitted", severity: "high", owasp: "M3", type: "manifest-rule", enabled: true, pattern: "usesCleartextTraffic=true || targetSdk < 28" },
+  { id: "SECRET_GENERIC_KEY_TOKEN_PASSWORD", title: "Hardcoded Credential / API Key Literal", severity: "high", owasp: "M9", type: "regex-code-rule", enabled: true, pattern: 'String (apiKey|secret|password) = "..."' },
+  { id: "SECRET_JWT", title: "Hardcoded JWT Token", severity: "high", owasp: "M2", type: "regex-code-rule", enabled: true, pattern: "eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\..." },
+  { id: "WEAK_CRYPTO_DES", title: "Weak Cryptography: DES / 3DES", severity: "high", owasp: "M5", type: "regex-code-rule", enabled: true, pattern: 'Cipher.getInstance("DES")' },
+  { id: "WEAK_CRYPTO_ECB", title: "Insecure Cipher Mode: ECB", severity: "high", owasp: "M5", type: "regex-code-rule", enabled: true, pattern: 'Cipher.getInstance(".../ECB/...")' },
+  { id: "SQL_INJECTION", title: "Dynamic SQL Query Concatenation", severity: "high", owasp: "M7", type: "regex-code-rule", enabled: true, pattern: 'rawQuery("... " + var)' },
+  { id: "WORLD_READABLE_WRITABLE_STORAGE", title: "World-Readable / World-Writable Storage", severity: "high", owasp: "M2", type: "regex-code-rule", enabled: true, pattern: "MODE_WORLD_READABLE | MODE_WORLD_WRITEABLE" },
+  { id: "MANIFEST_DANGEROUS_PERMISSION", title: "Dangerous Android Permission Requested", severity: "medium", owasp: "M1", type: "manifest-rule", enabled: true, pattern: "SEND_SMS, READ_CONTACTS, CAMERA, etc." },
+  { id: "MANIFEST_ALLOW_BACKUP", title: "Application Backup Enabled (allowBackup=true)", severity: "medium", owasp: "M2", type: "manifest-rule", enabled: true, pattern: 'android:allowBackup="true"' },
+  { id: "WEAK_CRYPTO_MD5", title: "Weak Hash Algorithm: MD5", severity: "medium", owasp: "M5", type: "regex-code-rule", enabled: true, pattern: 'MessageDigest.getInstance("MD5")' },
+  { id: "WEAK_CRYPTO_SHA1", title: "Weak Hash Algorithm: SHA-1", severity: "medium", owasp: "M5", type: "regex-code-rule", enabled: true, pattern: 'MessageDigest.getInstance("SHA-1")' },
+  { id: "CLEARTEXT_HTTP", title: "Unencrypted HTTP URL / Connection", severity: "medium", owasp: "M3", type: "regex-code-rule", enabled: true, pattern: 'http://... | HttpURLConnection' },
+  { id: "UNENCRYPTED_SQLITE", title: "Unencrypted SQLite Database Usage", severity: "medium", owasp: "M2", type: "compound-rule", enabled: true, pattern: "SQLiteDatabase without SQLCipher" },
+  { id: "INSECURE_RANDOM", title: "Insecure Pseudo-Random Number Generator", severity: "medium", owasp: "M5", type: "regex-code-rule", enabled: true, pattern: "java.util.Random" },
+  { id: "SENSITIVE_LOGGING", title: "Sensitive Data Logged to Logcat", severity: "low", owasp: "M2", type: "regex-code-rule", enabled: true, pattern: "Log.d(..., password|token|secret)" },
 ];
 
 const PIPELINE = [
-  { id:"ingest",    label:"Ingestion",     sub:"Load & validate .apk",  Icon:Upload   },
-  { id:"decompile", label:"Decompilation", sub:"jadx · dex → Java",     Icon:Code     },
-  { id:"extract",   label:"Extraction",    sub:"Manifest · permissions", Icon:Database },
-  { id:"rules",     label:"Rule Engine",   sub:"42 rules evaluated",     Icon:Shield   },
-  { id:"score",     label:"Scoring",       sub:"OWASP weighting",        Icon:Activity },
-];
-
-const LOG_LINES = [
-  "[jadx]          loading apk: com.bank.android-release.apk (18.4 MB)",
-  "[jadx]          decompiling classes.dex — 147 classes, 892 methods",
-  "[jadx]          output written to /tmp/decompiled/",
-  "[androguard]    parsed 42 permissions, 14 activities, 6 services",
-  "[manifest]      extracted: minSdk=24 targetSdk=33",
-  "[rule-engine]   starting pass — 42 rules loaded",
-  "[APK-MANIF-001] MATCH  usesCleartextTraffic=true",
-  "[APK-MANIF-002] MATCH  debuggable=true",
-  "[APK-MANIF-003] MATCH  LoginActivity exported, no permission",
-  "[APK-CODE-012]  MATCH  hardcoded credential NetworkClient.java:142",
-  "[APK-CODE-008]  MATCH  insecure RNG TokenManager.java:89",
-  "[APK-CODE-019]  MATCH  external storage FileManager.java:201",
-  "[scoring]       weighted risk score: 42 / 100  grade: D",
-  "[report]        generation complete — 6 findings",
-];
-
-const RECENT = [
-  { name:"com.bank.android",   score:42, grade:"D", sev:"critical" as Severity, ts:"2h ago"  },
-  { name:"com.retailapp.shop", score:71, grade:"C", sev:"medium"   as Severity, ts:"1d ago"  },
-  { name:"com.health.tracker", score:88, grade:"B", sev:"low"      as Severity, ts:"3d ago"  },
-  { name:"com.fintech.wallet", score:31, grade:"F", sev:"critical" as Severity, ts:"5d ago"  },
+  { id: "ingest",    label: "Ingestion",     sub: "Validate APK & calculate hash",     Icon: Upload   },
+  { id: "manifest",  label: "Manifest Scan", sub: "Permissions, components & flags",   Icon: Database },
+  { id: "decompile", label: "Decompilation", sub: "jadx decompiler subprocess",         Icon: Code     },
+  { id: "rules",     label: "Rule Engine",   sub: "Evaluate 20+ AST & regex rules",    Icon: Shield   },
+  { id: "score",     label: "Aggregation",   sub: "Calculate weighted OWASP score",    Icon: Activity },
 ];
 
 // ── NAV CONFIG ────────────────────────────────────────────────────────────────
-const NAV_SCREENS: Screen[] = ["upload","processing","report","findings","rules"];
+const NAV_SCREENS: Screen[] = ["upload", "processing", "report", "findings", "rules"];
 const NAV_ITEMS = [
   { icon: Upload,   label: "Scan"     },
   { icon: Activity, label: "Status"   },
@@ -177,11 +178,15 @@ function Pill({ children, color = T.accent, bg = T.accentBg, size = "sm" }: {
 }
 
 function SevBadge({ sev }: { sev: Severity }) {
-  return <Pill color={SEV[sev].color} bg={SEV[sev].bg}>{SEV[sev].label}</Pill>;
+  const s = sev?.toLowerCase() as Severity;
+  const cfg = SEV[s] || SEV.low;
+  return <Pill color={cfg.color} bg={cfg.bg}>{cfg.label}</Pill>;
 }
 
 function SevDot({ sev }: { sev: Severity }) {
-  return <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: SEV[sev].color }} />;
+  const s = sev?.toLowerCase() as Severity;
+  const cfg = SEV[s] || SEV.low;
+  return <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cfg.color }} />;
 }
 
 function OChip({ code }: { code: string }) {
@@ -233,14 +238,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function AlertBar({ type, children }: { type: "success" | "warning" | "error"; children: React.ReactNode }) {
   const cfg = {
     success: { color: T.success,  bg: T.successBg, Icon: CheckCircle2  },
-    warning: { color: T.medium,   bg: T.medBg,     Icon: AlertTriangle  },
+    warning: { color: T.high,     bg: T.highBg,    Icon: AlertTriangle  },
     error:   { color: T.critical, bg: T.critBg,    Icon: AlertCircle   },
   }[type];
   const { Icon } = cfg;
   return (
-    <div className="flex items-center gap-2.5 px-4 py-3" style={{ borderRadius: 999, backgroundColor: cfg.bg }}>
-      <Icon className="w-4 h-4 flex-shrink-0" style={{ color: cfg.color }} strokeWidth={2} />
-      <span className="text-sm font-medium" style={{ color: cfg.color, fontFamily: ui }}>{children}</span>
+    <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl" style={{ backgroundColor: cfg.bg }}>
+      <Icon className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: cfg.color }} strokeWidth={2} />
+      <span className="text-xs font-medium leading-relaxed" style={{ color: cfg.color, fontFamily: ui }}>{children}</span>
     </div>
   );
 }
@@ -268,12 +273,11 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   );
 }
 
-function ScoreArc({ score }: { score: number }) {
+function ScoreArc({ score, grade }: { score: number; grade: string }) {
   const R = 54, cx = 72, cy = 72;
   const half = Math.PI * R;
-  const prog = (score / 100) * half;
-  const col = score >= 70 ? T.success : score >= 50 ? T.medium : score >= 30 ? T.high : T.critical;
-  const grade = score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : score >= 50 ? "D" : "F";
+  const prog = Math.min(100, Math.max(0, score / 100)) * half;
+  const col = score >= 90 ? T.success : score >= 75 ? "#10B981" : score >= 60 ? T.medium : score >= 40 ? T.high : T.critical;
   return (
     <div className="flex flex-col items-center gap-1">
       <svg width="144" height="90" viewBox="0 0 144 90">
@@ -283,37 +287,13 @@ function ScoreArc({ score }: { score: number }) {
           fill="none" stroke={col} strokeWidth="7" strokeLinecap="round"
           strokeDasharray={`${prog} ${half}`} />
         <text x={cx} y={cy-10} textAnchor="middle" fontSize="30" fontWeight="700" fontFamily={ui} fill={T.text1}>{score}</text>
-        <text x={cx} y={cy+6} textAnchor="middle" fontSize="10" fontFamily={ui} fill={T.text4} letterSpacing="0.08em">RISK SCORE</text>
+        <text x={cx} y={cy+6} textAnchor="middle" fontSize="10" fontFamily={ui} fill={T.text4} letterSpacing="0.08em">SECURITY SCORE</text>
       </svg>
       <span className="text-xs font-bold px-3 py-1" style={{ borderRadius: 999, color: col, backgroundColor: `${col}18`, fontFamily: ui }}>
         GRADE {grade}
       </span>
     </div>
   );
-}
-
-interface JobData {
-  job_id: string;
-  app_name: string;
-  file_size_bytes: number;
-  status: string;
-  manifest?: {
-    package_name: string;
-    min_sdk?: string;
-    target_sdk?: string;
-    permissions: string[];
-    components: { name: string; type: string; exported: boolean; permission?: string; intent_filters: string[] }[];
-    debuggable: boolean;
-    allow_backup: boolean;
-    uses_cleartext_traffic: boolean;
-  };
-  decompilation?: {
-    status: string;
-    method: string;
-    file_count: number;
-    time_taken_seconds: number;
-    error?: string;
-  };
 }
 
 // ── SCREENS ───────────────────────────────────────────────────────────────────
@@ -325,9 +305,8 @@ function UploadScreen({
   const [dragging,     setDragging]     = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName,     setFileName]     = useState<string>("com.bank.android-release.apk");
-  const [fileSizeText, setFileSizeText] = useState<string>("18.4 MB (sample APK)");
+  const [fileSizeText, setFileSizeText] = useState<string>("Decoy Test APK (14+ vulnerabilities)");
   const [showAdv,      setShowAdv]      = useState(false);
-  const fileInputRef = useState<HTMLInputElement | null>(null);
 
   const handleFilePicked = (f: File) => {
     setSelectedFile(f);
@@ -341,7 +320,7 @@ function UploadScreen({
       <div>
         <h1 className="text-2xl font-bold" style={{ color: T.text1, fontFamily: ui }}>Analyze an APK</h1>
         <p className="text-sm mt-1" style={{ color: T.text3, fontFamily: ui }}>
-          Phase 1 + 2: Manifest parsing, jadx decompilation & code extraction.
+          Static APK security engine with JADX decompilation & OWASP Mobile Top 10 rule runner.
         </p>
       </div>
 
@@ -400,18 +379,18 @@ function UploadScreen({
 
       {/* Quick sample APK selector */}
       <div className="flex items-center justify-between px-2 text-xs">
-        <span style={{ color: T.text3 }}>Test fixtures available:</span>
+        <span style={{ color: T.text3 }}>Pre-configured test fixtures:</span>
         <button
           type="button"
           onClick={() => {
             setSelectedFile(null);
             setFileName("com.bank.android-release.apk");
-            setFileSizeText("Default test APK");
+            setFileSizeText("Decoy Test APK (14+ vulnerabilities)");
           }}
           className="font-medium underline"
           style={{ color: T.accent }}
         >
-          Load Default Fixture
+          Load Decoy Fixture
         </button>
       </div>
 
@@ -420,7 +399,7 @@ function UploadScreen({
         <button className="w-full flex items-center justify-between px-5 py-4" onClick={() => setShowAdv(!showAdv)}>
           <div className="flex items-center gap-2.5">
             <Zap className="w-4 h-4" style={{ color: T.text3 }} strokeWidth={1.5} />
-            <span className="text-sm font-medium" style={{ color: T.text2, fontFamily: ui }}>Decompiler options</span>
+            <span className="text-sm font-medium" style={{ color: T.text2, fontFamily: ui }}>Decompiler & Scanner Options</span>
           </div>
           <ChevronDown
             className="w-4 h-4 transition-transform"
@@ -432,21 +411,21 @@ function UploadScreen({
           <div className="px-5 pb-5 space-y-4" style={{ borderTop: `1px solid ${T.border}` }}>
             <div className="pt-4 space-y-4">
               <div>
-                <p className="text-xs font-medium mb-1.5" style={{ color: T.text3, fontFamily: ui }}>Engine</p>
+                <p className="text-xs font-medium mb-1.5" style={{ color: T.text3, fontFamily: ui }}>Decompiler Engine</p>
                 <select
                   className="w-full text-sm px-4 py-2.5 outline-none"
                   style={{ borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: T.surf2, color: T.text1, fontFamily: ui }}
                 >
-                  <option>jadx 1.5.6 (bundled)</option>
+                  <option>jadx 1.5.6 (with AST source streaming)</option>
                 </select>
               </div>
               <div>
-                <p className="text-xs font-medium mb-1.5" style={{ color: T.text3, fontFamily: ui }}>Subprocess Timeout</p>
+                <p className="text-xs font-medium mb-1.5" style={{ color: T.text3, fontFamily: ui }}>OWASP Benchmark Rule Set</p>
                 <select
                   className="w-full text-sm px-4 py-2.5 outline-none"
                   style={{ borderRadius: 12, border: `1px solid ${T.border}`, backgroundColor: T.surf2, color: T.text1, fontFamily: ui }}
                 >
-                  <option>90 seconds (standard)</option>
+                  <option>OWASP Mobile Top 10 (2024 Benchmark)</option>
                 </select>
               </div>
             </div>
@@ -454,37 +433,9 @@ function UploadScreen({
         )}
       </Card>
 
-      <PrimaryBtn onClick={() => onScan(selectedFile, fileName)} disabled={!fileName} full>
-        <Shield className="w-4 h-4" strokeWidth={1.5} />
-        Decompile & Extract APK
+      <PrimaryBtn onClick={() => onScan(selectedFile, fileName)} full>
+        <Shield className="w-4 h-4" /> Start Security Analysis
       </PrimaryBtn>
-
-      <div>
-        <SectionLabel>Recent Scans</SectionLabel>
-        <Card>
-          {RECENT.map((s, i) => (
-            <div key={i} className="flex items-center gap-3 px-5 py-3.5"
-              style={{ borderBottom: i < RECENT.length - 1 ? `1px solid ${T.border}` : "none" }}>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: SEV[s.sev].bg }}>
-                <SevDot sev={s.sev} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate" style={{ color: T.text1, fontFamily: mono }}>{s.name}</p>
-                <p className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: T.text4, fontFamily: ui }}>
-                  <Clock className="w-3 h-3" strokeWidth={1.5} />{s.ts}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-bold" style={{ color: T.text1, fontFamily: ui }}>{s.score}</span>
-                <span className="text-xs font-bold w-7 h-7 flex items-center justify-center"
-                  style={{ borderRadius: 8, backgroundColor: SEV[s.sev].bg, color: SEV[s.sev].color, fontFamily: ui }}>
-                  {s.grade}
-                </span>
-              </div>
-            </div>
-          ))}
-        </Card>
-      </div>
     </div>
   );
 }
@@ -494,12 +445,14 @@ function ProcessingScreen({
   fileName,
   jobData,
   setJobData,
+  onViewReport,
   onReset,
 }: {
   file: File | null;
   fileName: string;
   jobData: JobData | null;
   setJobData: (j: JobData | null) => void;
+  onViewReport: () => void;
   onReset: () => void;
 }) {
   const [stages, setStages] = useState<StageState[]>(["active", "pending", "pending", "pending", "pending"]);
@@ -509,8 +462,9 @@ function ProcessingScreen({
 
   useEffect(() => {
     let cancelled = false;
+    let pollInterval: any = null;
 
-    async function runDecompilation() {
+    async function startPipeline() {
       try {
         setLogs(prev => [...prev, `[client] connecting to /api/upload...`]);
         const formData = new FormData();
@@ -527,69 +481,89 @@ function ProcessingScreen({
 
         // Stage 0: Ingestion
         setStages(["active", "pending", "pending", "pending", "pending"]);
-        setLogs(prev => [...prev, `[ingest] sending APK to backend pipeline...`]);
+        setLogs(prev => [...prev, `[ingest] uploading APK to backend pipeline...`]);
 
-        const uploadPromise = fetch("/api/upload", {
+        const uploadRes = await fetch("/api/upload", {
           method: "POST",
           body: formData,
         });
 
-        // Advance to decompilation stage visually while backend processes
-        setTimeout(() => {
-          if (!cancelled) {
-            setStages(["complete", "active", "pending", "pending", "pending"]);
-            setLogs(prev => [
-              ...prev,
-              `[ingest] APK validated and saved to storage`,
-              `[jadx] starting jadx decompiler subprocess...`,
-            ]);
-          }
-        }, 600);
-
-        const response = await uploadPromise;
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`Upload failed (${response.status}): ${errText}`);
+        if (!uploadRes.ok) {
+          const errText = await uploadRes.text();
+          throw new Error(`Upload failed (${uploadRes.status}): ${errText}`);
         }
 
-        const data: JobData = await response.json();
+        const initialJob: JobData = await uploadRes.json();
         if (cancelled) return;
 
-        setJobData(data);
-
-        // Stages updated based on real results
-        setStages(["complete", "complete", "complete", "pending", "pending"]);
+        setJobData(initialJob);
+        setStages(["complete", "active", "pending", "pending", "pending"]);
         setLogs(prev => [
           ...prev,
-          `[manifest] extracted package: ${data.manifest?.package_name || "unknown"}`,
-          `[manifest] found ${data.manifest?.permissions.length || 0} permissions, ${data.manifest?.components.length || 0} components`,
-          `[jadx] decompiler finished (${data.decompilation?.time_taken_seconds || 0}s, method: ${data.decompilation?.method})`,
-          `[extractor] ${data.decompilation?.file_count || 0} Java source files extracted and verified`,
-          `[pipeline] Phase 1 + 2 completed successfully. Ready for Phase 3 (Rule Engine).`,
+          `[ingest] APK validated and job ${initialJob.job_id} enqueued`,
+          `[manifest] parsing binary AXML & permissions...`,
+          `[jadx] starting jadx decompiler subprocess in background...`,
         ]);
-        setDone(true);
+
+        // Poll for job status
+        pollInterval = setInterval(async () => {
+          if (cancelled) return;
+          try {
+            const statusRes = await fetch(`/api/jobs/${initialJob.job_id}`);
+            if (!statusRes.ok) return;
+            const updatedJob: JobData = await statusRes.json();
+            
+            if (cancelled) return;
+            setJobData(updatedJob);
+
+            if (updatedJob.status === "complete" || updatedJob.status === "partial") {
+              clearInterval(pollInterval);
+              setStages(["complete", "complete", "complete", "complete", "complete"]);
+              setLogs(prev => [
+                ...prev,
+                `[manifest] extracted package: ${updatedJob.manifest?.package_name || updatedJob.app_name}`,
+                `[manifest] declared permissions: ${updatedJob.manifest?.permissions.length || 0}, components: ${updatedJob.manifest?.components.length || 0}`,
+                `[jadx] decompilation finished (${updatedJob.decompilation?.time_taken_seconds || 0}s, method: ${updatedJob.decompilation?.method || "jadx"})`,
+                `[extractor] verified ${updatedJob.decompilation?.file_count || 0} Java source files`,
+                `[rules] evaluated all manifest and code AST rules (${updatedJob.findings.length} findings)`,
+                `[scoring] computed security score: ${updatedJob.score}/100 (Grade ${updatedJob.grade})`,
+                `[pipeline] Security scan complete!`,
+              ]);
+              setDone(true);
+            } else if (updatedJob.status === "failed") {
+              clearInterval(pollInterval);
+              setError(updatedJob.error || "Analysis pipeline failed");
+              setStages(["complete", "complete", "pending", "pending", "pending"]);
+              setLogs(prev => [...prev, `[error] Job failed: ${updatedJob.error}`]);
+            }
+          } catch (e: any) {
+            // Ignore temporary network errors during polling
+          }
+        }, 1000);
+
       } catch (err: any) {
         if (cancelled) return;
-        setError(err.message || "Decompilation failed");
+        setError(err.message || "Pipeline execution failed");
         setStages(["complete", "pending", "pending", "pending", "pending"]);
         setLogs(prev => [...prev, `[error] ${err.message}`]);
       }
     }
 
-    runDecompilation();
+    startPipeline();
     return () => {
       cancelled = true;
+      if (pollInterval) clearInterval(pollInterval);
     };
   }, [file, fileName]);
 
   const stagesDone = stages.filter(s => s === "complete").length;
-  const pct = done ? 60 : Math.round((stagesDone / PIPELINE.length) * 100);
+  const pct = done ? 100 : Math.round((stagesDone / PIPELINE.length) * 100);
 
   return (
     <div className="h-full overflow-y-auto px-4 pt-4 pb-28 space-y-4">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: T.text1, fontFamily: ui }}>
-          {done ? "Extraction Complete" : "Decompiling APK…"}
+          {done ? "Analysis Complete" : "Scanning APK…"}
         </h1>
         <p className="text-xs mt-1" style={{ color: T.text3, fontFamily: mono }}>{fileName}</p>
       </div>
@@ -597,77 +571,77 @@ function ProcessingScreen({
       <Card className="p-5">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-semibold" style={{ color: T.text1, fontFamily: ui }}>
-            {done ? "Phase 1 + 2 Complete" : error ? "Decompilation Failed" : "Decompiling & Extracting…"}
+            {done ? "Full Scan Finished" : error ? "Analysis Failed" : "Decompiling & Running Rules…"}
           </span>
           <span className="text-sm font-bold" style={{ color: T.accent, fontFamily: ui }}>
-            {done ? "60%" : `${pct}%`}
+            {pct}%
           </span>
         </div>
         <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: T.bg }}>
           <div className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${done ? 60 : pct}%`, backgroundColor: error ? T.critical : T.accent }} />
+            style={{ width: `${pct}%`, backgroundColor: error ? T.critical : T.accent }} />
         </div>
         <div className="flex items-center justify-between mt-3">
           <span className="text-xs" style={{ color: T.text3, fontFamily: ui }}>
             {stagesDone} of {PIPELINE.length} stages complete
           </span>
-          {done && jobData?.decompilation && (
+          {done && jobData && (
             <span className="text-xs font-semibold px-2.5 py-1"
               style={{ borderRadius: 999, color: T.success, backgroundColor: T.successBg, fontFamily: ui }}>
-              ✓ {jobData.decompilation.file_count} Java files extracted
+              ✓ Score: {jobData.score}/100 ({jobData.findings.length} findings)
             </span>
           )}
         </div>
       </Card>
 
-      {/* Proof of decompilation stats card */}
+      {/* Partial scan / warnings alert */}
+      {jobData?.decompilation_incomplete && (
+        <AlertBar type="warning">
+          <strong>Partial Scan Notice:</strong> Decompilation produced warnings or partial source output. Some components may not have been fully analyzed.
+        </AlertBar>
+      )}
+
+      {/* Scan Summary Stats Card */}
       {done && jobData && (
         <Card className="p-5 space-y-3" style={{ border: `1px solid ${T.accent}` }}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider" style={{ color: T.accent, fontFamily: ui }}>
-              Decompilation Proof & Extraction Stats
+              Scan Results & Proof
             </span>
-            <Pill color={T.accent} bg={T.accentBg}>Job: {jobData.job_id}</Pill>
+            <Pill color={T.accent} bg={T.accentBg}>Job: {jobData.job_id.slice(0, 8)}</Pill>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-xs pt-1">
             <div className="p-2.5 rounded-xl" style={{ backgroundColor: T.surf2 }}>
-              <p className="text-[10px]" style={{ color: T.text4 }}>Java Files Extracted</p>
-              <p className="text-sm font-bold mt-0.5" style={{ color: T.text1, fontFamily: mono }}>
-                {jobData.decompilation?.file_count} files
+              <p className="text-[10px]" style={{ color: T.text4 }}>Security Score</p>
+              <p className="text-sm font-bold mt-0.5" style={{ color: jobData.score < 60 ? T.critical : T.success, fontFamily: mono }}>
+                {jobData.score} / 100 (Grade {jobData.grade})
               </p>
             </div>
             <div className="p-2.5 rounded-xl" style={{ backgroundColor: T.surf2 }}>
-              <p className="text-[10px]" style={{ color: T.text4 }}>Decompilation Time</p>
+              <p className="text-[10px]" style={{ color: T.text4 }}>Vulnerabilities Found</p>
               <p className="text-sm font-bold mt-0.5" style={{ color: T.text1, fontFamily: mono }}>
-                {jobData.decompilation?.time_taken_seconds}s
+                {jobData.findings.length} findings
               </p>
             </div>
             <div className="p-2.5 rounded-xl" style={{ backgroundColor: T.surf2 }}>
-              <p className="text-[10px]" style={{ color: T.text4 }}>Engine / Method</p>
+              <p className="text-[10px]" style={{ color: T.text4 }}>Java Files Decompiled</p>
               <p className="text-sm font-bold mt-0.5" style={{ color: T.text1, fontFamily: mono }}>
-                {jobData.decompilation?.method === "jadx" ? "jadx 1.5.6" : "source bundle"}
+                {jobData.decompilation?.file_count || 0} files ({jobData.decompilation?.time_taken_seconds || 0}s)
               </p>
             </div>
             <div className="p-2.5 rounded-xl" style={{ backgroundColor: T.surf2 }}>
-              <p className="text-[10px]" style={{ color: T.text4 }}>Declared Permissions</p>
-              <p className="text-sm font-bold mt-0.5" style={{ color: T.text1, fontFamily: mono }}>
-                {jobData.manifest?.permissions.length || 0} permissions
+              <p className="text-[10px]" style={{ color: T.text4 }}>Critical / High Issues</p>
+              <p className="text-sm font-bold mt-0.5" style={{ color: T.critical, fontFamily: mono }}>
+                {(jobData.summary.critical || 0) + (jobData.summary.high || 0)} issues
               </p>
             </div>
           </div>
 
-          <div className="pt-1 text-[11px] space-y-1" style={{ color: T.text2, fontFamily: ui }}>
-            <p><span className="font-semibold">Package:</span> <code style={{ fontFamily: mono }}>{jobData.manifest?.package_name}</code></p>
-            <p><span className="font-semibold">Components:</span> {jobData.manifest?.components.length || 0} (Activities, Services, Receivers)</p>
-            <p><span className="font-semibold">SDK Support:</span> minSdk {jobData.manifest?.min_sdk || "N/A"}, targetSdk {jobData.manifest?.target_sdk || "N/A"}</p>
-          </div>
-
-          <div className="p-3 rounded-xl flex items-center gap-2" style={{ backgroundColor: T.accentBg }}>
-            <CheckCircle className="w-4 h-4" style={{ color: T.accent }} />
-            <span className="text-xs font-medium" style={{ color: T.text2 }}>
-              Ready for Phase 3: Rule engine will iterate over the extracted source files.
-            </span>
+          <div className="pt-2 flex gap-2">
+            <PrimaryBtn onClick={onViewReport} full>
+              <FileText className="w-4 h-4" /> View Full Security Report
+            </PrimaryBtn>
           </div>
         </Card>
       )}
@@ -678,7 +652,6 @@ function ProcessingScreen({
         <div className="space-y-1">
           {PIPELINE.map(({ id, label, sub, Icon }, i) => {
             const state = stages[i];
-            const isPhase3 = i >= 3;
             return (
               <div key={id} className="flex items-center gap-3 py-2.5">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -692,13 +665,15 @@ function ProcessingScreen({
                 <div className="flex-1">
                   <p className="text-sm font-medium"
                     style={{ color: state === "complete" ? T.text1 : state === "active" ? T.accent : T.text4, fontFamily: ui }}>
-                    {label} {isPhase3 && <span className="text-[10px] font-normal" style={{ color: T.text4 }}>(Phase 3)</span>}
+                    {label}
                   </p>
                   <p className="text-[10px]" style={{ color: T.text4, fontFamily: mono }}>
-                    {state === "complete" && i === 1 && jobData?.decompilation
-                      ? `${jobData.decompilation.file_count} files in ${jobData.decompilation.time_taken_seconds}s`
-                      : state === "complete" && i === 2 && jobData?.manifest
+                    {state === "complete" && i === 1 && jobData?.manifest
                       ? `${jobData.manifest.permissions.length} perms, ${jobData.manifest.components.length} comps`
+                      : state === "complete" && i === 2 && jobData?.decompilation
+                      ? `${jobData.decompilation.file_count} files in ${jobData.decompilation.time_taken_seconds}s`
+                      : state === "complete" && i === 3 && jobData
+                      ? `${jobData.findings.length} findings detected`
                       : sub}
                   </p>
                 </div>
@@ -715,15 +690,15 @@ function ProcessingScreen({
       <Card>
         <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
           <Terminal className="w-3.5 h-3.5" style={{ color: T.text3 }} strokeWidth={1.5} />
-          <span className="text-xs font-medium" style={{ color: T.text3, fontFamily: ui }}>decompilation.log</span>
+          <span className="text-xs font-medium" style={{ color: T.text3, fontFamily: ui }}>pipeline_execution.log</span>
           {!done && !error && <span className="ml-auto w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: T.accent }} />}
         </div>
-        <div className="p-4 max-h-36 overflow-y-auto" style={{ backgroundColor: T.surf2, borderRadius: "0 0 16px 16px" }}>
+        <div className="p-4 max-h-44 overflow-y-auto" style={{ backgroundColor: T.surf2, borderRadius: "0 0 16px 16px" }}>
           {logs.map((line, i) => (
             <p key={i} className="text-[11px] leading-5"
               style={{
                 fontFamily: mono,
-                color: line.includes("[error]") ? T.critical : line.includes("[jadx]") || line.includes("[extractor]") ? T.accent : line.includes("[pipeline]") ? T.success : T.text3,
+                color: line.includes("[error]") ? T.critical : line.includes("[jadx]") || line.includes("[rules]") ? T.accent : line.includes("[pipeline]") || line.includes("[scoring]") ? T.success : T.text3,
               }}>
               {line}
             </p>
@@ -733,41 +708,69 @@ function ProcessingScreen({
       </Card>
 
       {done && (
-        <PrimaryBtn onClick={onReset} full>
+        <GhostBtn onClick={onReset}>
           Scan Another APK
-        </PrimaryBtn>
+        </GhostBtn>
       )}
     </div>
   );
 }
 
-function ReportScreen({ onFindings }: { onFindings: () => void }) {
-  const counts = {
-    critical: FINDINGS.filter(f => f.severity === "critical").length,
-    high:     FINDINGS.filter(f => f.severity === "high").length,
-    medium:   FINDINGS.filter(f => f.severity === "medium").length,
-    low:      FINDINGS.filter(f => f.severity === "low").length,
+function ReportScreen({
+  jobData,
+  onFindings,
+}: {
+  jobData: JobData | null;
+  onFindings: () => void;
+}) {
+  const score = jobData?.score ?? 0;
+  const grade = jobData?.grade ?? "F";
+  const appName = jobData?.manifest?.package_name || jobData?.app_name || "com.bank.android";
+  const findings = jobData?.findings || [];
+  
+  const counts = jobData?.summary || {
+    critical: findings.filter(f => f.severity === "critical").length,
+    high:     findings.filter(f => f.severity === "high").length,
+    medium:   findings.filter(f => f.severity === "medium").length,
+    low:      findings.filter(f => f.severity === "low").length,
   };
+
   const owasp10 = ["M1","M2","M3","M4","M5","M6","M7","M8","M9","M10"];
-  const hit = new Set(FINDINGS.map(f => f.owasp));
+  const hitOwasp = new Set(findings.map(f => {
+    const m = f.owasp_category.match(/M\d+/);
+    return m ? m[0] : "";
+  }).filter(Boolean));
 
   return (
     <div className="h-full overflow-y-auto px-4 pt-4 pb-28 space-y-4">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-xs font-medium" style={{ color: T.text4, fontFamily: ui }}>Scan complete</p>
-          <h2 className="text-lg font-bold mt-0.5" style={{ color: T.text1, fontFamily: mono }}>com.bank.android</h2>
-          <p className="text-xs mt-0.5" style={{ color: T.text4, fontFamily: ui }}>Sep 14 2026 · 09:41 UTC</p>
+          <p className="text-xs font-medium" style={{ color: T.text4, fontFamily: ui }}>Security Assessment Report</p>
+          <h2 className="text-lg font-bold mt-0.5 truncate max-w-[240px]" style={{ color: T.text1, fontFamily: mono }}>
+            {appName}
+          </h2>
+          <p className="text-xs mt-0.5" style={{ color: T.text4, fontFamily: ui }}>
+            {findings.length} findings identified
+          </p>
         </div>
         <div className="flex gap-2 flex-shrink-0 pt-1">
-          <GhostBtn><RefreshCw className="w-3.5 h-3.5" strokeWidth={1.5} /> Rescan</GhostBtn>
-          <GhostBtn><Download className="w-3.5 h-3.5" strokeWidth={1.5} /></GhostBtn>
+          <GhostBtn onClick={onFindings}>
+            <List className="w-3.5 h-3.5" strokeWidth={1.5} /> Findings
+          </GhostBtn>
         </div>
       </div>
 
+      {/* Incomplete scan warning banner */}
+      {jobData?.decompilation_incomplete && (
+        <AlertBar type="warning">
+          <strong>⚠️ Partial Scan Warning:</strong> Decompilation was incomplete or encountered warnings. Security score and findings may not cover all components.
+        </AlertBar>
+      )}
+
+      {/* Headline Metric Card */}
       <Card className="p-5">
         <div className="flex items-center gap-4">
-          <ScoreArc score={42} />
+          <ScoreArc score={score} grade={grade} />
           <div className="flex-1 space-y-3">
             <SectionLabel>By Severity</SectionLabel>
             <div className="flex h-2 rounded-full overflow-hidden gap-px">
@@ -780,7 +783,9 @@ function ReportScreen({ onFindings }: { onFindings: () => void }) {
                 <div key={s} className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: SEV[s].color }} />
                   <span className="text-xs flex-1" style={{ color: T.text3, fontFamily: ui }}>{SEV[s].label}</span>
-                  <span className="text-sm font-bold" style={{ color: counts[s] ? SEV[s].color : T.text4, fontFamily: ui }}>{counts[s]}</span>
+                  <span className="text-sm font-bold" style={{ color: counts[s] ? SEV[s].color : T.text4, fontFamily: ui }}>
+                    {counts[s]}
+                  </span>
                 </div>
               ))}
             </div>
@@ -791,22 +796,30 @@ function ReportScreen({ onFindings }: { onFindings: () => void }) {
       <div className="grid grid-cols-4 gap-2">
         {(["critical","high","medium","low"] as Severity[]).map(s => (
           <Card key={s} className="p-3 text-center">
-            <span className="block text-xl font-bold" style={{ color: counts[s] ? SEV[s].color : T.text4, fontFamily: ui }}>{counts[s]}</span>
-            <span className="block text-[9px] font-semibold tracking-wide mt-1" style={{ color: T.text4, fontFamily: ui }}>{s.toUpperCase()}</span>
+            <span className="block text-xl font-bold" style={{ color: counts[s] ? SEV[s].color : T.text4, fontFamily: ui }}>
+              {counts[s]}
+            </span>
+            <span className="block text-[9px] font-semibold tracking-wide mt-1" style={{ color: T.text4, fontFamily: ui }}>
+              {s.toUpperCase()}
+            </span>
           </Card>
         ))}
       </div>
 
+      {/* OWASP Matrix */}
       <Card className="p-5">
-        <SectionLabel>OWASP Mobile Top 10</SectionLabel>
+        <SectionLabel>OWASP Mobile Top 10 Coverage</SectionLabel>
         <div className="grid grid-cols-5 gap-2">
           {owasp10.map(cat => {
-            const f = FINDINGS.find(fi => fi.owasp === cat);
-            const active = hit.has(cat);
+            const active = hitOwasp.has(cat);
             return (
               <div key={cat} className="flex items-center justify-center py-2.5 text-[11px] font-bold"
-                style={{ borderRadius: 10, backgroundColor: active && f ? SEV[f.severity].bg : T.bg,
-                  color: active && f ? SEV[f.severity].color : T.text4, fontFamily: mono }}>
+                style={{
+                  borderRadius: 10,
+                  backgroundColor: active ? T.critBg : T.bg,
+                  color: active ? T.critical : T.text4,
+                  fontFamily: mono
+                }}>
                 {cat}
               </div>
             );
@@ -814,30 +827,42 @@ function ReportScreen({ onFindings }: { onFindings: () => void }) {
         </div>
       </Card>
 
-      <div className="space-y-2">
-        <AlertBar type="error">2 Critical findings require immediate action</AlertBar>
-        <AlertBar type="warning">1 High severity credential exposure detected</AlertBar>
-      </div>
+      {/* Severity alerts */}
+      {counts.critical > 0 && (
+        <AlertBar type="error">
+          {counts.critical} Critical findings require immediate remediation before release.
+        </AlertBar>
+      )}
+      {counts.high > 0 && (
+        <AlertBar type="warning">
+          {counts.high} High severity issues detected across components and code.
+        </AlertBar>
+      )}
 
+      {/* Top Findings preview */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <SectionLabel>Top Findings</SectionLabel>
           <button className="text-xs font-semibold" style={{ color: T.accent, fontFamily: ui }} onClick={onFindings}>
-            View all ({FINDINGS.length}) →
+            View all ({findings.length}) →
           </button>
         </div>
         <Card>
-          {FINDINGS.slice(0, 3).map((f, i) => (
-            <button key={f.id} className="w-full text-left flex items-center gap-3 px-5 py-4 active:bg-gray-50 transition-colors"
-              style={{ borderBottom: i < 2 ? `1px solid ${T.border}` : "none" }} onClick={onFindings}>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: SEV[f.severity].bg }}>
+          {findings.slice(0, 4).map((f, i) => (
+            <button
+              key={`${f.id}-${i}`}
+              className="w-full text-left flex items-center gap-3 px-5 py-4 active:bg-gray-50 transition-colors"
+              style={{ borderBottom: i < Math.min(3, findings.length - 1) ? `1px solid ${T.border}` : "none" }}
+              onClick={onFindings}
+            >
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: SEV[f.severity]?.bg || T.bg }}>
                 <SevDot sev={f.severity} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate" style={{ color: T.text1, fontFamily: ui }}>{f.title}</p>
                 <p className="text-[10px] mt-0.5 truncate" style={{ color: T.text4, fontFamily: mono }}>{f.location}</p>
               </div>
-              <OChip code={f.owasp} />
+              <OChip code={f.owasp_category.split(":")[0]} />
             </button>
           ))}
         </Card>
@@ -846,19 +871,39 @@ function ReportScreen({ onFindings }: { onFindings: () => void }) {
   );
 }
 
-function FindingsScreen({ onSelect }: { onSelect: (f: Finding) => void }) {
-  const [q,   setQ]   = useState("");
-  const [sev, setSev] = useState<Severity | "all">("all");
+function FindingsScreen({
+  findings,
+  onSelect,
+}: {
+  findings: FindingItem[];
+  onSelect: (f: FindingItem) => void;
+}) {
+  const [q,        setQ]        = useState("");
+  const [sev,      setSev]      = useState<Severity | "all">("all");
+  const [groupByLoc, setGroupByLoc] = useState(false);
+  const [expandedRem, setExpandedRem] = useState<string | null>(null);
 
-  const visible = FINDINGS.filter(f => {
-    const mQ = !q || f.title.toLowerCase().includes(q.toLowerCase()) || f.location.toLowerCase().includes(q.toLowerCase());
+  const visible = findings.filter(f => {
+    const qLower = q.toLowerCase();
+    const mQ = !q ||
+      f.title.toLowerCase().includes(qLower) ||
+      f.location.toLowerCase().includes(qLower) ||
+      f.id.toLowerCase().includes(qLower) ||
+      f.owasp_category.toLowerCase().includes(qLower);
     const mS = sev === "all" || f.severity === sev;
     return mQ && mS;
   });
 
+  // Grouping by location
+  const grouped = visible.reduce((acc, f) => {
+    acc[f.location] = acc[f.location] || [];
+    acc[f.location].push(f);
+    return acc;
+  }, {} as Record<string, FindingItem[]>);
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* filters — fixed inside the screen */}
+      {/* Search & Filter Header */}
       <div className="flex-shrink-0 px-4 pt-4 pb-3 space-y-3" style={{ backgroundColor: T.bg }}>
         <div className="flex items-center gap-2 px-4 py-3"
           style={{ borderRadius: 999, backgroundColor: T.white, border: `1px solid ${T.border}`, boxShadow: T.shadow }}>
@@ -866,17 +911,18 @@ function FindingsScreen({ onSelect }: { onSelect: (f: Finding) => void }) {
           <input
             className="flex-1 text-sm bg-transparent outline-none placeholder:text-[#98A2B3]"
             style={{ color: T.text1, fontFamily: ui }}
-            placeholder="Search findings…"
+            placeholder="Search findings by rule, class, or OWASP…"
             value={q}
             onChange={e => setQ(e.target.value)}
           />
           {q && <button onClick={() => setQ("")}><X className="w-4 h-4" style={{ color: T.text4 }} strokeWidth={1.5} /></button>}
         </div>
+
+        {/* Severity pill selectors */}
         <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
           {(["all","critical","high","medium","low"] as const).map(s => {
             const active = sev === s;
             const color  = s === "all" ? T.accent : SEV[s]?.color;
-            const bg     = s === "all" ? T.accentBg : SEV[s]?.bg;
             return (
               <button key={s}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold flex-shrink-0 transition-all"
@@ -890,53 +936,135 @@ function FindingsScreen({ onSelect }: { onSelect: (f: Finding) => void }) {
                 }}
                 onClick={() => setSev(s)}
               >
-                {active && <CheckCircle className="w-3 h-3" strokeWidth={2.5} />}
+                {active && <Check className="w-3 h-3" strokeWidth={2.5} />}
                 {s === "all" ? "All" : SEV[s].label}
               </button>
             );
           })}
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs" style={{ color: T.text4, fontFamily: ui }}>{visible.length} findings</span>
-          {sev !== "all" && (
-            <button className="text-xs flex items-center gap-1" style={{ color: T.text3, fontFamily: ui }} onClick={() => setSev("all")}>
-              <X className="w-3 h-3" /> clear
-            </button>
-          )}
+
+        {/* Action / View toggle bar */}
+        <div className="flex items-center justify-between text-xs">
+          <span style={{ color: T.text4, fontFamily: ui }}>{visible.length} findings matched</span>
+          <button
+            onClick={() => setGroupByLoc(!groupByLoc)}
+            className="flex items-center gap-1 font-semibold px-2.5 py-1 rounded-full"
+            style={{
+              backgroundColor: groupByLoc ? T.accentBg : T.white,
+              color: groupByLoc ? T.accent : T.text3,
+              border: `1px solid ${T.border}`
+            }}
+          >
+            <Layers className="w-3 h-3" />
+            {groupByLoc ? "Grouped by Location" : "Flat List"}
+          </button>
         </div>
       </div>
 
-      {/* scrollable list */}
-      <div className="flex-1 overflow-y-auto px-4 space-y-2.5 pb-28">
-        {visible.map(f => (
-          <button key={f.id} className="w-full text-left active:scale-[0.98] transition-transform" onClick={() => onSelect(f)}>
-            <Card className="p-4">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: SEV[f.severity].bg }}>
-                  <SevDot sev={f.severity} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold leading-snug" style={{ color: T.text1, fontFamily: ui }}>{f.title}</p>
-                    <ChevronRight className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: T.text4 }} strokeWidth={1.5} />
-                  </div>
-                  <p className="text-[10px] mt-1 truncate" style={{ color: T.text4, fontFamily: mono }}>{f.location}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <SevBadge sev={f.severity} />
-                    <OChip code={f.owasp} />
-                    <span className="text-[10px]" style={{ color: T.text4, fontFamily: mono }}>{f.source}</span>
-                  </div>
-                </div>
+      {/* Findings List */}
+      <div className="flex-1 overflow-y-auto px-4 space-y-3 pb-28">
+        {visible.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-sm font-semibold" style={{ color: T.text3, fontFamily: ui }}>No findings match your filter</p>
+            <p className="text-xs mt-1" style={{ color: T.text4, fontFamily: ui }}>Try selecting "All" or clearing the search query</p>
+          </div>
+        ) : groupByLoc ? (
+          // Grouped by file/location view
+          Object.entries(grouped).map(([location, groupFindings]) => (
+            <div key={location} className="space-y-2">
+              <div className="flex items-center gap-2 px-1 pt-2">
+                <FileCode className="w-3.5 h-3.5" style={{ color: T.accent }} />
+                <span className="text-xs font-bold truncate max-w-[280px]" style={{ color: T.text2, fontFamily: mono }}>
+                  {location}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold ml-auto"
+                  style={{ backgroundColor: T.accentBg, color: T.accent }}>
+                  {groupFindings.length}
+                </span>
               </div>
-            </Card>
-          </button>
-        ))}
+              {groupFindings.map((f, i) => (
+                <FindingCard
+                  key={`${f.id}-${i}`}
+                  finding={f}
+                  onSelect={() => onSelect(f)}
+                  expandedRem={expandedRem === `${f.id}-${f.location}`}
+                  onToggleRem={() => setExpandedRem(expandedRem === `${f.id}-${f.location}` ? null : `${f.id}-${f.location}`)}
+                />
+              ))}
+            </div>
+          ))
+        ) : (
+          // Flat list view
+          visible.map((f, i) => (
+            <FindingCard
+              key={`${f.id}-${i}`}
+              finding={f}
+              onSelect={() => onSelect(f)}
+              expandedRem={expandedRem === `${f.id}-${f.location}`}
+              onToggleRem={() => setExpandedRem(expandedRem === `${f.id}-${f.location}` ? null : `${f.id}-${f.location}`)}
+            />
+          ))
+        )}
       </div>
     </div>
   );
 }
 
-function FindingDetail({ finding: f, onClose }: { finding: Finding; onClose: () => void }) {
+function FindingCard({
+  finding: f,
+  onSelect,
+  expandedRem,
+  onToggleRem,
+}: {
+  finding: FindingItem;
+  onSelect: () => void;
+  expandedRem: boolean;
+  onToggleRem: () => void;
+}) {
+  return (
+    <Card className="p-4 transition-all">
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: SEV[f.severity]?.bg || T.bg }}>
+          <SevDot sev={f.severity} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2 cursor-pointer" onClick={onSelect}>
+            <p className="text-sm font-semibold leading-snug" style={{ color: T.text1, fontFamily: ui }}>{f.title}</p>
+            <ChevronRight className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: T.text4 }} strokeWidth={1.5} />
+          </div>
+          <p className="text-[10px] mt-1 truncate" style={{ color: T.text4, fontFamily: mono }}>{f.location}</p>
+          
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <SevBadge sev={f.severity} />
+            <OChip code={f.owasp_category.split(":")[0]} />
+            <span className="text-[10px]" style={{ color: T.text4, fontFamily: mono }}>{f.id}</span>
+          </div>
+
+          {/* Quick inline expandable remediation toggle */}
+          <div className="mt-3 pt-2" style={{ borderTop: `1px solid ${T.border}` }}>
+            <button
+              onClick={e => { e.stopPropagation(); onToggleRem(); }}
+              className="flex items-center gap-1 text-[11px] font-semibold"
+              style={{ color: T.accent, fontFamily: ui }}
+            >
+              <Shield className="w-3 h-3" />
+              {expandedRem ? "Hide Fix Guidance" : "View Fix Guidance"}
+              <ChevronDown className={`w-3 h-3 transition-transform ${expandedRem ? "rotate-180" : ""}`} />
+            </button>
+            {expandedRem && (
+              <div className="mt-2 p-3 rounded-xl" style={{ backgroundColor: T.successBg }}>
+                <p className="text-xs font-semibold mb-1" style={{ color: T.success, fontFamily: ui }}>Remediation:</p>
+                <p className="text-xs leading-relaxed" style={{ color: T.text1, fontFamily: ui }}>{f.remediation}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function FindingDetail({ finding: f, onClose }: { finding: FindingItem; onClose: () => void }) {
   return (
     <div className="absolute inset-0 z-50 flex flex-col" style={{ backgroundColor: T.bg }}>
       <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0"
@@ -950,21 +1078,20 @@ function FindingDetail({ finding: f, onClose }: { finding: Finding; onClose: () 
 
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4 pb-8">
         <div className="flex items-center gap-2 flex-wrap">
-          <OChip code={f.owasp} />
-          <Pill color={T.text3} bg={T.bg} size="xs">{f.source}</Pill>
-          <Pill color={T.text3} bg={T.bg} size="xs">{f.ruleId}</Pill>
+          <OChip code={f.owasp_category} />
+          <Pill color={T.text3} bg={T.bg} size="xs">{f.id}</Pill>
         </div>
 
         <Card className="p-4">
           <SectionLabel>Location</SectionLabel>
           <div className="px-3 py-2.5 rounded-xl" style={{ backgroundColor: T.accentBg }}>
-            <code className="text-sm" style={{ color: T.accent, fontFamily: mono }}>{f.location}</code>
+            <code className="text-xs leading-relaxed" style={{ color: T.accent, fontFamily: mono }}>{f.location}</code>
           </div>
         </Card>
 
         <Card className="p-4">
-          <SectionLabel>Evidence</SectionLabel>
-          <div className="px-4 py-3 rounded-xl" style={{ backgroundColor: T.bg }}>
+          <SectionLabel>Evidence / Finding Match</SectionLabel>
+          <div className="px-4 py-3 rounded-xl overflow-x-auto" style={{ backgroundColor: T.bg }}>
             <pre className="text-[11px] leading-relaxed whitespace-pre-wrap" style={{ color: T.high, fontFamily: mono }}>{f.evidence}</pre>
           </div>
         </Card>
@@ -974,7 +1101,7 @@ function FindingDetail({ finding: f, onClose }: { finding: Finding; onClose: () 
             <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: T.successBg }}>
               <Shield className="w-3 h-3" style={{ color: T.success }} strokeWidth={2} />
             </div>
-            <SectionLabel>Remediation</SectionLabel>
+            <SectionLabel>Actionable Remediation Guidance</SectionLabel>
           </div>
           <div className="p-4 rounded-xl" style={{ backgroundColor: T.successBg }}>
             <p className="text-sm leading-relaxed" style={{ color: T.text1, fontFamily: ui }}>{f.remediation}</p>
@@ -982,28 +1109,23 @@ function FindingDetail({ finding: f, onClose }: { finding: Finding; onClose: () 
         </Card>
 
         <Card className="p-4">
-          <SectionLabel>Rule Details</SectionLabel>
+          <SectionLabel>Rule Metadata</SectionLabel>
           <div className="space-y-2.5">
-            {[["Rule ID", f.ruleId], ["Data source", f.source], ["OWASP", f.owasp]].map(([k, v]) => (
+            {[["Rule Identifier", f.id], ["OWASP Category", f.owasp_category], ["Target Location", f.location]].map(([k, v]) => (
               <div key={k} className="flex items-center justify-between">
                 <span className="text-xs" style={{ color: T.text3, fontFamily: ui }}>{k}</span>
-                <code className="text-xs" style={{ color: T.text1, fontFamily: mono }}>{v}</code>
+                <code className="text-xs truncate max-w-[200px]" style={{ color: T.text1, fontFamily: mono }}>{v}</code>
               </div>
             ))}
           </div>
         </Card>
-
-        <div className="grid grid-cols-2 gap-3">
-          <GhostBtn>Mark false positive</GhostBtn>
-          <GhostBtn>Accept risk</GhostBtn>
-        </div>
       </div>
     </div>
   );
 }
 
 function RulesScreen() {
-  const [rules, setRules]  = useState<Rule[]>(RULES);
+  const [rules, setRules]  = useState<RuleItem[]>(DEFAULT_RULES);
   const [expanded, setExp] = useState<string | null>(null);
   const toggle = (id: string) => setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
 
@@ -1011,16 +1133,16 @@ function RulesScreen() {
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-shrink-0 px-4 pt-4 pb-3 flex items-center justify-between" style={{ backgroundColor: T.bg }}>
         <p className="text-xs" style={{ color: T.text4, fontFamily: ui }}>
-          {rules.filter(r => r.enabled).length} active · {rules.length} total
+          {rules.filter(r => r.enabled).length} active · {rules.length} total security rules
         </p>
-        <GhostBtn><Plus className="w-3.5 h-3.5" strokeWidth={2} /> Add rule</GhostBtn>
+        <GhostBtn><Plus className="w-3.5 h-3.5" strokeWidth={2} /> Custom rule</GhostBtn>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 space-y-2.5 pb-28">
         {rules.map(rule => (
           <Card key={rule.id}>
             <div className="px-4 py-4 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: SEV[rule.severity].bg }}>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: SEV[rule.severity]?.bg || T.bg }}>
                 <SevDot sev={rule.severity} />
               </div>
               <button className="flex-1 min-w-0 text-left" onClick={() => setExp(expanded === rule.id ? null : rule.id)}>
@@ -1060,7 +1182,7 @@ function RulesScreen() {
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const [navIdx,       setNavIdx]       = useState(0);
-  const [selected,     setSelected]     = useState<Finding | null>(null);
+  const [selected,     setSelected]     = useState<FindingItem | null>(null);
   const [profileOpen,  setProfileOpen]  = useState(false);
   const [isDark,       setIsDark]       = useState(false);
   const [scanFile,     setScanFile]     = useState<File | null>(null);
@@ -1090,7 +1212,6 @@ export default function App() {
             backgroundColor: T.white,
             borderBottom: `1px solid ${T.border}`,
             boxShadow: T.shadow,
-            /* Push content below Dynamic Island / status bar */
             paddingTop: "env(safe-area-inset-top, 0px)",
           }}
         >
@@ -1098,28 +1219,29 @@ export default function App() {
             className="flex items-center justify-between px-5"
             style={{ height: 52 }}
           >
-            {/* Shield icon only — no wordmark */}
             <div
-              className="flex items-center justify-center"
+              className="flex items-center justify-center cursor-pointer"
               style={{
                 width: 36, height: 36,
                 borderRadius: 11,
                 backgroundColor: T.accentBg,
               }}
+              onClick={() => setNavIdx(0)}
             >
               <Shield className="w-5 h-5" style={{ color: T.accent }} strokeWidth={2} />
             </div>
 
-            {/* Profile avatar — exactly 44×44 tap target per iOS HIG */}
+            <span className="text-xs font-bold tracking-wider uppercase" style={{ color: T.text2, fontFamily: ui }}>
+              HealDroid Security
+            </span>
+
             <button
               onClick={() => setProfileOpen(true)}
               aria-label="Open profile"
               style={{
-                /* 44×44 outer tap target */
                 width: 44, height: 44,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 borderRadius: 999,
-                /* visual circle is 34×34 inside the tap target */
               }}
             >
               <div
@@ -1133,13 +1255,13 @@ export default function App() {
                   boxShadow: "0 2px 8px rgba(19,184,166,0.28)",
                 }}
               >
-                JD
+                HD
               </div>
             </button>
           </div>
         </div>
 
-        {/* ── CONTENT — fills all remaining height, overlays float on top ── */}
+        {/* ── CONTENT ── */}
         <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
           {screen === "upload" && (
             <UploadScreen onScan={handleStartScan} />
@@ -1150,17 +1272,28 @@ export default function App() {
               fileName={scanFileName}
               jobData={jobData}
               setJobData={setJobData}
+              onViewReport={() => setNavIdx(2)}
               onReset={() => {
                 setJobData(null);
                 setNavIdx(0);
               }}
             />
           )}
-          {screen === "report"     && <ReportScreen onFindings={() => setNavIdx(3)} />}
-          {screen === "findings"   && <FindingsScreen onSelect={setSelected} />}
-          {screen === "rules"      && <RulesScreen />}
+          {screen === "report" && (
+            <ReportScreen
+              jobData={jobData}
+              onFindings={() => setNavIdx(3)}
+            />
+          )}
+          {screen === "findings" && (
+            <FindingsScreen
+              findings={jobData?.findings || []}
+              onSelect={setSelected}
+            />
+          )}
+          {screen === "rules" && <RulesScreen />}
 
-          {/* Finding detail */}
+          {/* Finding detail overlay */}
           {selected && <FindingDetail finding={selected} onClose={() => setSelected(null)} />}
 
           {/* Floating spotlight nav */}

@@ -1,13 +1,13 @@
-﻿import os
+import os
 import sys
 import time
 import shutil
 import zipfile
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
-from backend.app.schemas import DecompileStats
+from backend.app.models import DecompileStats
 
 TIMEOUT_SECONDS = 90
 
@@ -61,7 +61,8 @@ def _extract_raw_java_source(apk_path: Path, output_dir: Path) -> int:
 def decompile_apk(apk_path: Path, job_dir: Path, timeout: int = TIMEOUT_SECONDS) -> DecompileStats:
     """
     Decompiles an APK using jadx into job_dir/decompiled.
-    Handles timeout, failures, and fallback for source-bundle APKs.
+    Handles timeout, failures, partial decompilations, and fallback for source-bundle APKs.
+    Surfaces decompilation_incomplete and decompilation_warnings in DecompileStats.
     """
     decompiled_dir = job_dir / "decompiled"
     decompiled_dir.mkdir(parents=True, exist_ok=True)
@@ -79,13 +80,17 @@ def decompile_apk(apk_path: Path, job_dir: Path, timeout: int = TIMEOUT_SECONDS)
                 method="raw_source",
                 file_count=extracted,
                 time_taken_seconds=elapsed,
+                decompilation_incomplete=False,
+                decompilation_warnings=[]
             )
         return DecompileStats(
             status="failed",
             method="none",
             file_count=0,
             time_taken_seconds=elapsed,
-            error="jadx binary not found. Please run setup_jadx.ps1 or setup_jadx.sh."
+            error="jadx binary not found. Please run setup_jadx.ps1 or setup_jadx.sh.",
+            decompilation_incomplete=True,
+            decompilation_warnings=["jadx binary not found on system PATH or in tools/jadx"]
         )
 
     # Invoke jadx CLI
@@ -107,12 +112,35 @@ def decompile_apk(apk_path: Path, job_dir: Path, timeout: int = TIMEOUT_SECONDS)
         elapsed = round(time.time() - start_time, 2)
         file_count = count_java_files(decompiled_dir)
         
+        warnings: List[str] = []
+        stderr_text = proc.stderr or ""
+        stdout_text = proc.stdout or ""
+        combined_output = f"{stdout_text}\n{stderr_text}"
+        
+        # Check for errors/warnings in output
+        for line in combined_output.splitlines():
+            line_str = line.strip()
+            if "ERROR" in line_str or "WARN" in line_str:
+                if len(line_str) > 200:
+                    line_str = line_str[:200] + "..."
+                if line_str not in warnings:
+                    warnings.append(line_str)
+                    if len(warnings) >= 10:  # limit noise
+                        break
+
+        incomplete = False
+        if proc.returncode != 0:
+            incomplete = True
+            warnings.append(f"jadx process exited with non-zero code {proc.returncode}")
+
         if file_count > 0:
             return DecompileStats(
                 status="complete",
                 method="jadx",
                 file_count=file_count,
                 time_taken_seconds=elapsed,
+                decompilation_incomplete=incomplete or len(warnings) > 0,
+                decompilation_warnings=warnings
             )
             
         # If jadx exited with 0 files, check if APK has raw .java files (e.g. test fixture archive)
@@ -123,6 +151,8 @@ def decompile_apk(apk_path: Path, job_dir: Path, timeout: int = TIMEOUT_SECONDS)
                 method="raw_source",
                 file_count=extracted,
                 time_taken_seconds=elapsed,
+                decompilation_incomplete=False,
+                decompilation_warnings=[]
             )
             
         err_msg = proc.stderr.strip() or proc.stdout.strip() or "jadx produced no Java files."
@@ -131,17 +161,22 @@ def decompile_apk(apk_path: Path, job_dir: Path, timeout: int = TIMEOUT_SECONDS)
             method="jadx",
             file_count=0,
             time_taken_seconds=elapsed,
-            error=err_msg[:500]
+            error=err_msg[:500],
+            decompilation_incomplete=True,
+            decompilation_warnings=[err_msg[:300]]
         )
         
     except subprocess.TimeoutExpired:
         elapsed = round(time.time() - start_time, 2)
+        file_count = count_java_files(decompiled_dir)
         return DecompileStats(
-            status="failed",
+            status="failed" if file_count == 0 else "complete",
             method="jadx",
-            file_count=0,
+            file_count=file_count,
             time_taken_seconds=elapsed,
-            error=f"Decompilation timed out after {timeout} seconds."
+            error=f"Decompilation timed out after {timeout} seconds.",
+            decompilation_incomplete=True,
+            decompilation_warnings=[f"Decompilation timed out after {timeout} seconds; partial files may have been recovered."]
         )
     except Exception as e:
         elapsed = round(time.time() - start_time, 2)
@@ -150,5 +185,7 @@ def decompile_apk(apk_path: Path, job_dir: Path, timeout: int = TIMEOUT_SECONDS)
             method="jadx",
             file_count=0,
             time_taken_seconds=elapsed,
-            error=str(e)
+            error=str(e),
+            decompilation_incomplete=True,
+            decompilation_warnings=[str(e)]
         )

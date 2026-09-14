@@ -1,10 +1,15 @@
-﻿import os
+import os
+import sys
 import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
-from backend.app.schemas import ManifestData, ManifestComponent
+from loguru import logger
+logger.remove()
+logger.add(sys.stderr, level="WARNING")
+
+from backend.app.models import ManifestData, ManifestComponent
 
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 NS_MAP = {"android": ANDROID_NS}
@@ -29,116 +34,19 @@ def _parse_with_androguard(apk_path: str | Path) -> Optional[ManifestData]:
         pkg = apk.get_package() or ""
         min_sdk = str(apk.get_min_sdk_version() or "")
         target_sdk = str(apk.get_target_sdk_version() or "")
+        target_sdk_version = int(target_sdk) if target_sdk and target_sdk.isdigit() else None
+        
         permissions = list(apk.get_permissions() or [])
+        components: List[ManifestComponent] = []
         
-        # Details on components
-        components: list[ManifestComponent] = []
+        manifest_xml = apk.get_android_manifest_xml()
+        app_elem = manifest_xml.find("application") if manifest_xml is not None else None
         
-        # Activities
-        for act in apk.get_activities() or []:
-            act_clean = _clean_str(act)
-            if not act_clean:
-                continue
-            is_exp = False
-            perm = None
-            try:
-                elem = apk.get_android_element("activity", act_clean)
-                if elem is not None:
-                    exp_val = elem.get(f"{{{ANDROID_NS}}}exported")
-                    if exp_val is not None:
-                        is_exp = str(exp_val).lower() in ("true", "1")
-                    perm = _clean_str(elem.get(f"{{{ANDROID_NS}}}permission"))
-            except Exception:
-                pass
-            components.append(ManifestComponent(
-                name=act_clean,
-                type="activity",
-                exported=is_exp,
-                permission=perm,
-            ))
-            
-        # Services
-        for srv in apk.get_services() or []:
-            srv_clean = _clean_str(srv)
-            if not srv_clean:
-                continue
-            is_exp = False
-            perm = None
-            try:
-                elem = apk.get_android_element("service", srv_clean)
-                if elem is not None:
-                    exp_val = elem.get(f"{{{ANDROID_NS}}}exported")
-                    if exp_val is not None:
-                        is_exp = str(exp_val).lower() in ("true", "1")
-                    perm = _clean_str(elem.get(f"{{{ANDROID_NS}}}permission"))
-            except Exception:
-                pass
-            components.append(ManifestComponent(
-                name=srv_clean,
-                type="service",
-                exported=is_exp,
-                permission=perm,
-            ))
-
-        # Receivers
-        for rec in apk.get_receivers() or []:
-            rec_clean = _clean_str(rec)
-            if not rec_clean:
-                continue
-            is_exp = False
-            perm = None
-            try:
-                elem = apk.get_android_element("receiver", rec_clean)
-                if elem is not None:
-                    exp_val = elem.get(f"{{{ANDROID_NS}}}exported")
-                    if exp_val is not None:
-                        is_exp = str(exp_val).lower() in ("true", "1")
-                    perm = _clean_str(elem.get(f"{{{ANDROID_NS}}}permission"))
-            except Exception:
-                pass
-            components.append(ManifestComponent(
-                name=rec_clean,
-                type="receiver",
-                exported=is_exp,
-                permission=perm,
-            ))
-
-        # Providers
-        for prv in apk.get_providers() or []:
-            prv_clean = _clean_str(prv)
-            if not prv_clean:
-                continue
-            is_exp = False
-            perm = None
-            try:
-                elem = apk.get_android_element("provider", prv_clean)
-                if elem is not None:
-                    exp_val = elem.get(f"{{{ANDROID_NS}}}exported")
-                    if exp_val is not None:
-                        is_exp = str(exp_val).lower() in ("true", "1")
-                    perm = _clean_str(elem.get(f"{{{ANDROID_NS}}}permission"))
-            except Exception:
-                pass
-            components.append(ManifestComponent(
-                name=prv_clean,
-                type="provider",
-                exported=is_exp,
-                permission=perm,
-            ))
-
-        # Flags
         debuggable = False
         allow_backup = True
         uses_cleartext = False
+        network_sec_config: Optional[str] = None
         
-        app_elem = None
-        try:
-            manifest_xml = apk.get_android_manifest_xml()
-            if manifest_xml is not None:
-                app_elem = manifest_xml.find("application")
-        except Exception:
-            pass
-
         if app_elem is not None:
             dbg = app_elem.get(f"{{{ANDROID_NS}}}debuggable")
             if dbg is not None:
@@ -151,18 +59,59 @@ def _parse_with_androguard(apk_path: str | Path) -> Optional[ManifestData]:
             ct = app_elem.get(f"{{{ANDROID_NS}}}usesCleartextTraffic")
             if ct is not None:
                 uses_cleartext = str(ct).lower() in ("true", "1")
+                
+            nsc = app_elem.get(f"{{{ANDROID_NS}}}networkSecurityConfig")
+            if nsc is not None:
+                network_sec_config = _clean_str(nsc)
+
+            tag_type_map = {
+                "activity": "activity",
+                "service": "service",
+                "receiver": "receiver",
+                "provider": "provider"
+            }
+            
+            for tag, comp_type in tag_type_map.items():
+                for elem in app_elem.findall(tag):
+                    name = _clean_str(elem.get(f"{{{ANDROID_NS}}}name")) or ""
+                    exp_val = elem.get(f"{{{ANDROID_NS}}}exported")
+                    perm = _clean_str(elem.get(f"{{{ANDROID_NS}}}permission"))
+                    
+                    intent_filters: List[str] = []
+                    for ifilter in elem.findall("intent-filter"):
+                        for action in ifilter.findall("action"):
+                            a_name = _clean_str(action.get(f"{{{ANDROID_NS}}}name"))
+                            if a_name:
+                                intent_filters.append(a_name)
+                                
+                    has_filters = len(intent_filters) > 0 or len(elem.findall("intent-filter")) > 0
+                    if exp_val is not None:
+                        exported = str(exp_val).lower() in ("true", "1")
+                    else:
+                        exported = has_filters
+                        
+                    components.append(ManifestComponent(
+                        name=name,
+                        type=comp_type,
+                        exported=exported,
+                        permission=perm,
+                        intent_filters=intent_filters
+                    ))
 
         return ManifestData(
             package_name=pkg,
             min_sdk=min_sdk or None,
             target_sdk=target_sdk or None,
+            target_sdk_version=target_sdk_version,
+            network_security_config=network_sec_config,
             permissions=permissions,
             components=components,
             debuggable=debuggable,
             allow_backup=allow_backup,
             uses_cleartext_traffic=uses_cleartext
         )
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Androguard parsing failed: {e}")
         return None
 
 def _parse_with_elementtree(xml_bytes: bytes) -> ManifestData:
@@ -172,9 +121,12 @@ def _parse_with_elementtree(xml_bytes: bytes) -> ManifestData:
     uses_sdk = root.find("uses-sdk")
     min_sdk = None
     target_sdk = None
+    target_sdk_version = None
     if uses_sdk is not None:
         min_sdk = uses_sdk.attrib.get(f"{{{ANDROID_NS}}}minSdkVersion")
         target_sdk = uses_sdk.attrib.get(f"{{{ANDROID_NS}}}targetSdkVersion")
+        if target_sdk and target_sdk.isdigit():
+            target_sdk_version = int(target_sdk)
         
     permissions = []
     for perm_elem in root.findall("uses-permission"):
@@ -182,11 +134,12 @@ def _parse_with_elementtree(xml_bytes: bytes) -> ManifestData:
         if p_name:
             permissions.append(p_name)
             
-    components: list[ManifestComponent] = []
+    components: List[ManifestComponent] = []
     app_elem = root.find("application")
     debuggable = False
     allow_backup = True
     uses_cleartext = False
+    network_sec_config = None
     
     if app_elem is not None:
         dbg = app_elem.attrib.get(f"{{{ANDROID_NS}}}debuggable")
@@ -201,6 +154,10 @@ def _parse_with_elementtree(xml_bytes: bytes) -> ManifestData:
         if ct is not None:
             uses_cleartext = ct.lower() in ("true", "1")
             
+        nsc = app_elem.attrib.get(f"{{{ANDROID_NS}}}networkSecurityConfig")
+        if nsc is not None:
+            network_sec_config = nsc
+            
         tag_type_map = {
             "activity": "activity",
             "service": "service",
@@ -212,21 +169,21 @@ def _parse_with_elementtree(xml_bytes: bytes) -> ManifestData:
             for elem in app_elem.findall(tag):
                 name = elem.attrib.get(f"{{{ANDROID_NS}}}name") or ""
                 exported_attr = elem.attrib.get(f"{{{ANDROID_NS}}}exported")
-                has_filters = len(elem.findall("intent-filter")) > 0
                 
-                if exported_attr is not None:
-                    exported = exported_attr.lower() in ("true", "1")
-                else:
-                    # Default in Android: exported if intent-filters exist
-                    exported = has_filters
-                    
-                perm = elem.attrib.get(f"{{{ANDROID_NS}}}permission")
                 intent_filters = []
                 for ifilter in elem.findall("intent-filter"):
                     for action in ifilter.findall("action"):
                         a_name = action.attrib.get(f"{{{ANDROID_NS}}}name")
                         if a_name:
                             intent_filters.append(a_name)
+                
+                has_filters = len(intent_filters) > 0 or len(elem.findall("intent-filter")) > 0
+                if exported_attr is not None:
+                    exported = exported_attr.lower() in ("true", "1")
+                else:
+                    exported = has_filters
+                    
+                perm = elem.attrib.get(f"{{{ANDROID_NS}}}permission")
                             
                 components.append(ManifestComponent(
                     name=name,
@@ -240,6 +197,8 @@ def _parse_with_elementtree(xml_bytes: bytes) -> ManifestData:
         package_name=pkg,
         min_sdk=min_sdk,
         target_sdk=target_sdk,
+        target_sdk_version=target_sdk_version,
+        network_security_config=network_sec_config,
         permissions=permissions,
         components=components,
         debuggable=debuggable,
