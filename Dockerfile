@@ -1,11 +1,12 @@
-FROM python:3.11-slim
+FROM node:20-bookworm-slim
 
-# Install OpenJDK 17 (headless), wget, unzip for JADX decompiler and AXML analysis
+# Install OpenJDK runtime (default-jre-headless), wget, unzip, curl for JADX decompiler
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    openjdk-17-jre-headless \
+    default-jre-headless \
     wget \
     unzip \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install official JADX CLI decompiler
@@ -19,17 +20,25 @@ RUN wget -q "https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.
 
 WORKDIR /app
 
-# Install Python backend dependencies
-COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+# Copy dependency configs
+COPY package*.json ./
+COPY .npmrc ./
 
-# Copy backend source code and rules
-COPY backend /app/backend
+# Install dependencies cleanly
+RUN npm install --legacy-peer-deps
 
-# Create runtime storage directories
+# Copy application source code
+COPY . .
+
+# Build Next.js fullstack production bundle
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+RUN npm run build
+
+# Create storage directory for APK analysis
 RUN mkdir -p /app/storage/jobs
 
-EXPOSE 8000
+EXPOSE 3000
 
-ENV PORT=8000
-CMD ["sh", "-c", "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+ENV PORT=3000
+CMD ["sh", "-c", "npx next start -p ${PORT:-3000} -H 0.0.0.0"]
