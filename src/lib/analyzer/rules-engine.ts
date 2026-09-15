@@ -1,5 +1,5 @@
 import { Finding, ManifestData, SeverityLevel } from "./types";
-import rawRules from "./rules.json";
+import { RULE_DEFINITIONS } from "./rules-data";
 
 export const DANGEROUS_PERMISSIONS = new Set([
   "android.permission.READ_CALENDAR",
@@ -176,7 +176,7 @@ export function runCodeRules(codeFiles: CodeFile[]): Finding[] {
   const seenKeys = new Set<string>();
 
   // Compile regex patterns
-  const compiledRules = (rawRules as any[]).map((r) => {
+  const compiledRules = (RULE_DEFINITIONS as any[]).map((r) => {
     let patternStr: string = r.pattern;
     let flags = "g";
     if (patternStr.includes("(?i)")) {

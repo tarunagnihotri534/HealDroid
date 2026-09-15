@@ -6,7 +6,8 @@ import {
   X, CheckCircle, Terminal, RefreshCw, Download,
   Search, Plus, ArrowLeft, ChevronDown, Activity,
   Database, Code, AlertCircle, CheckCircle2, AlertTriangle,
-  ChevronRight, Clock, Zap, Layers, FileCode, Check
+  ChevronRight, Clock, Zap, Layers, FileCode, Check,
+  Lock, Mail, User, Eye, EyeOff, ArrowRight, Sparkles
 } from "lucide-react";
 import { SpotlightNav } from "@/app/components/ui/spotlight-nav";
 import { ProfileSheet } from "@/app/components/ui/profile-sheet";
@@ -1830,6 +1831,273 @@ function RulesScreen() {
   );
 }
 
+interface AuthUser {
+  name: string;
+  email: string;
+  role: string;
+}
+
+function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!email || !password) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+    if (isSignUp && !name) {
+      setError("Please enter your name or organization.");
+      return;
+    }
+
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      onLogin({
+        name: isSignUp ? name : (email.split("@")[0] || "Security Auditor"),
+        email: email,
+        role: "Lead Security Auditor",
+      });
+    }, 500);
+  };
+
+  const handleDemoLogin = () => {
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      onLogin({
+        name: "Tarun Agnihotri",
+        email: "tarun.security@healdroid.io",
+        role: "Lead Mobile SAST Auditor",
+      });
+    }, 300);
+  };
+
+  return (
+    <div className="flex justify-center" style={{ backgroundColor: "#E8EAF0", minHeight: "100dvh" }}>
+      <div
+        className="relative w-full max-w-[430px] flex flex-col justify-between"
+        style={{ height: "100dvh", overflowY: "auto", backgroundColor: T.bg, padding: "env(safe-area-inset-top, 24px) 20px 24px 20px" }}
+      >
+        <div className="flex flex-col items-center pt-6">
+          {/* Logo Badge */}
+          <div
+            className="flex items-center justify-center relative mb-3"
+            style={{
+              width: 58,
+              height: 58,
+              borderRadius: 18,
+              backgroundColor: T.accent,
+              boxShadow: "0 8px 24px rgba(19,184,166,0.35)",
+            }}
+          >
+            <Shield size={32} color={T.white} />
+          </div>
+
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-2" style={{ backgroundColor: T.accentBg }}>
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: T.accent }} />
+            <span className="text-[11px] font-bold tracking-wider" style={{ color: T.accent, fontFamily: ui }}>HEALDROID PORTAL</span>
+          </div>
+
+          <h1 className="text-xl font-bold text-center" style={{ color: T.text1, fontFamily: ui }}>
+            {isSignUp ? "Create Auditor Account" : "Access Security Portal"}
+          </h1>
+          <p className="text-xs text-center mt-1 max-w-[300px]" style={{ color: T.text3, fontFamily: ui }}>
+            {isSignUp
+              ? "Register to start running static APK vulnerability assessments & compliance scans."
+              : "Sign in to access your decompilation workspace and security findings."}
+          </p>
+
+          {/* Tab Selector */}
+          <div
+            className="w-full flex p-1 rounded-xl mt-5 mb-4"
+            style={{ backgroundColor: T.surf2, border: `1px solid ${T.border}` }}
+          >
+            <button
+              type="button"
+              onClick={() => { setIsSignUp(false); setError(""); }}
+              className="flex-1 py-2 text-xs font-semibold rounded-lg transition-all"
+              style={{
+                backgroundColor: !isSignUp ? T.white : "transparent",
+                color: !isSignUp ? T.text1 : T.text3,
+                boxShadow: !isSignUp ? T.shadow : "none",
+                fontFamily: ui,
+              }}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsSignUp(true); setError(""); }}
+              className="flex-1 py-2 text-xs font-semibold rounded-lg transition-all"
+              style={{
+                backgroundColor: isSignUp ? T.white : "transparent",
+                color: isSignUp ? T.text1 : T.text3,
+                boxShadow: isSignUp ? T.shadow : "none",
+                fontFamily: ui,
+              }}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="w-full space-y-3">
+            {isSignUp && (
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: T.text2, fontFamily: ui }}>
+                  Full Name / Organization
+                </label>
+                <div className="relative flex items-center">
+                  <User size={15} className="absolute left-3.5" style={{ color: T.text4 }} />
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Tarun Agnihotri"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs outline-none transition-all"
+                    style={{
+                      backgroundColor: T.white,
+                      border: `1px solid ${T.border}`,
+                      color: T.text1,
+                      fontFamily: ui,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: T.text2, fontFamily: ui }}>
+                Auditor Email
+              </label>
+              <div className="relative flex items-center">
+                <Mail size={15} className="absolute left-3.5" style={{ color: T.text4 }} />
+                <input
+                  type="email"
+                  required
+                  placeholder="name@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs outline-none transition-all"
+                  style={{
+                    backgroundColor: T.white,
+                    border: `1px solid ${T.border}`,
+                    color: T.text1,
+                    fontFamily: ui,
+                  }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: T.text2, fontFamily: ui }}>
+                Security Password
+              </label>
+              <div className="relative flex items-center">
+                <Lock size={15} className="absolute left-3.5" style={{ color: T.text4 }} />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl text-xs outline-none transition-all"
+                  style={{
+                    backgroundColor: T.white,
+                    border: `1px solid ${T.border}`,
+                    color: T.text1,
+                    fontFamily: ui,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 p-1"
+                  style={{ color: T.text4 }}
+                >
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-2.5 rounded-lg flex items-center gap-2 text-xs" style={{ backgroundColor: T.critBg, color: T.critical }}>
+                <AlertCircle size={14} className="flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 mt-2 transition-all cursor-pointer"
+              style={{
+                backgroundColor: T.accent,
+                boxShadow: "0 4px 14px rgba(19,184,166,0.3)",
+                fontFamily: ui,
+                opacity: loading ? 0.7 : 1,
+              }}
+            >
+              {loading ? (
+                <RefreshCw size={15} className="animate-spin" />
+              ) : (
+                <>
+                  <span>{isSignUp ? "Create Auditor Account" : "Sign In to Scanner"}</span>
+                  <ArrowRight size={15} />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Quick 1-Tap Demo Login Button */}
+          <div className="w-full mt-3">
+            <div className="relative flex py-2 items-center">
+              <div className="flex-grow border-t" style={{ borderColor: T.border }}></div>
+              <span className="flex-shrink mx-3 text-[10px] uppercase font-bold" style={{ color: T.text4, fontFamily: ui }}>OR Instant Access</span>
+              <div className="flex-grow border-t" style={{ borderColor: T.border }}></div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDemoLogin}
+              className="w-full py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all mt-1 cursor-pointer"
+              style={{
+                backgroundColor: T.white,
+                border: `1px solid ${T.border}`,
+                color: T.text1,
+                fontFamily: ui,
+                boxShadow: T.shadow,
+              }}
+            >
+              <Sparkles size={14} style={{ color: T.accent }} />
+              <span>Enter as Security Auditor (1-Click Demo)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Security Footer Note */}
+        <div className="text-center pt-3 pb-1">
+          <div className="inline-flex items-center justify-center gap-1 text-[10px]" style={{ color: T.text4, fontFamily: ui }}>
+            <Shield size={11} style={{ color: T.accent }} />
+            <span>256-Bit Encrypted Session · ISO 27001 & OWASP Aligned</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 const NAV_SCREENS: Screen[] = ["upload", "processing", "report", "findings", "rules"];
 
@@ -1842,6 +2110,18 @@ const NAV_ITEMS = [
 ];
 
 export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("healdroid_user");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (_) {}
+      }
+    }
+    return null;
+  });
+
   const [navIdx,       setNavIdx]       = useState(0);
   const [selected,     setSelected]     = useState<FindingItem | null>(null);
   const [profileOpen,  setProfileOpen]  = useState(false);
@@ -1881,6 +2161,21 @@ export default function App() {
 
   const screen = NAV_SCREENS[navIdx];
 
+  const handleLogin = (newUser: AuthUser) => {
+    setUser(newUser);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("healdroid_user", JSON.stringify(newUser));
+    }
+  };
+
+  const handleSignOut = () => {
+    setUser(null);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("healdroid_user");
+    }
+    setProfileOpen(false);
+  };
+
   const handleStartScan = (file: File | null, fileName: string, mode: "lightning" | "standard" | "deep" = "standard") => {
     setScanMode(mode);
     setScanFile(file);
@@ -1889,6 +2184,10 @@ export default function App() {
     setScanId(id => id + 1);
     setNavIdx(1); // switch to processing
   };
+
+  if (!user) {
+    return <AuthScreen onLogin={handleLogin} />;
+  }
 
   return (
     <div className="flex justify-center" style={{ backgroundColor: "#E8EAF0", minHeight: "100dvh" }}>
@@ -2016,7 +2315,7 @@ export default function App() {
             onClose={() => setProfileOpen(false)}
             isDark={isDark}
             onThemeToggle={() => setIsDark(d => !d)}
-            onSignOut={() => setProfileOpen(false)}
+            onSignOut={handleSignOut}
           />
         </div>
       </div>

@@ -1,8 +1,8 @@
-import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
   View,
+  TextInput,
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
@@ -24,6 +24,13 @@ import {
   Terminal,
   RefreshCw,
   Search,
+  Lock,
+  Mail,
+  User,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  Sparkles,
 } from "lucide-react-native";
 
 // ── DESIGN TOKENS (EXACT MATCH) ────────────────────────────────────────────────
@@ -102,10 +109,207 @@ const SAMPLE_FINDINGS: FindingItem[] = [
   },
 ];
 
+interface AuthUser {
+  name: string;
+  email: string;
+  role: string;
+}
+
+function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = () => {
+    setError("");
+    if (!email || !password) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+    if (isSignUp && !name) {
+      setError("Please enter your name.");
+      return;
+    }
+
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      onLogin({
+        name: isSignUp ? name : (email.split("@")[0] || "Security Auditor"),
+        email: email,
+        role: "Lead Security Auditor",
+      });
+    }, 400);
+  };
+
+  const handleDemoLogin = () => {
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      onLogin({
+        name: "Tarun Agnihotri",
+        email: "tarun.security@healdroid.io",
+        role: "Lead Mobile SAST Auditor",
+      });
+    }, 250);
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor={T.white} />
+      <ScrollView contentContainerStyle={styles.authContainer}>
+        <View style={styles.authCard}>
+          {/* Logo */}
+          <View style={styles.authLogoBadge}>
+            <Shield size={32} color={T.white} />
+          </View>
+
+          <View style={styles.authPill}>
+            <Text style={styles.authPillText}>HEALDROID MOBILE PORTAL</Text>
+          </View>
+
+          <Text style={styles.authTitle}>
+            {isSignUp ? "Create Auditor Account" : "Access Security Portal"}
+          </Text>
+          <Text style={styles.authSubtitle}>
+            {isSignUp
+              ? "Register to start running static APK vulnerability assessments."
+              : "Sign in to access decompilation workspaces and reports."}
+          </Text>
+
+          {/* Toggle */}
+          <View style={styles.authTabRow}>
+            <TouchableOpacity
+              style={[styles.authTabBtn, !isSignUp && styles.authTabBtnActive]}
+              onPress={() => { setIsSignUp(false); setError(""); }}
+            >
+              <Text style={[styles.authTabText, !isSignUp && styles.authTabTextActive]}>Sign In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.authTabBtn, isSignUp && styles.authTabBtnActive]}
+              onPress={() => { setIsSignUp(true); setError(""); }}
+            >
+              <Text style={[styles.authTabText, isSignUp && styles.authTabTextActive]}>Sign Up</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Inputs */}
+          {isSignUp && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Full Name / Organization</Text>
+              <View style={styles.inputWrapper}>
+                <User size={16} color={T.text4} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g. Tarun Agnihotri"
+                  placeholderTextColor={T.text4}
+                  value={name}
+                  onChangeText={setName}
+                />
+              </View>
+            </View>
+          )}
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Auditor Email</Text>
+            <View style={styles.inputWrapper}>
+              <Mail size={16} color={T.text4} style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="name@company.com"
+                placeholderTextColor={T.text4}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Security Password</Text>
+            <View style={styles.inputWrapper}>
+              <Lock size={16} color={T.text4} style={styles.inputIcon} />
+              <TextInput
+                style={[styles.textInput, { paddingRight: 40 }]}
+                placeholder="••••••••••••"
+                placeholderTextColor={T.text4}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff size={16} color={T.text4} /> : <Eye size={16} color={T.text4} />}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {error ? (
+            <View style={styles.errorBox}>
+              <AlertCircle size={14} color={T.critical} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={styles.primaryAuthBtn}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={T.white} />
+            ) : (
+              <View style={styles.btnRow}>
+                <Text style={styles.primaryBtnText}>
+                  {isSignUp ? "Create Auditor Account" : "Sign In to Scanner"}
+                </Text>
+                <ArrowRight size={16} color={T.white} />
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* 1-Click Demo Access */}
+          <View style={styles.orDivider}>
+            <View style={styles.orLine} />
+            <Text style={styles.orText}>OR INSTANT ACCESS</Text>
+            <View style={styles.orLine} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.demoAuthBtn}
+            onPress={handleDemoLogin}
+          >
+            <Sparkles size={16} color={T.accent} />
+            <Text style={styles.demoBtnText}>Enter as Security Auditor (1-Click Demo)</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.authFooter}>
+          <Shield size={12} color={T.accent} />
+          <Text style={styles.authFooterText}>256-Bit Encrypted Session · ISO 27001 & OWASP Aligned</Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [screen, setScreen] = useState<Screen>("upload");
   const [selectedFinding, setSelectedFinding] = useState<FindingItem | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+
+  if (!user) {
+    return <AuthScreen onLogin={setUser} />;
+  }
 
   const navItems = [
     { label: "Upload", icon: Upload, screen: "upload" as Screen },
@@ -723,5 +927,200 @@ const styles = StyleSheet.create({
     color: "#E2E8F0",
     fontFamily: "monospace",
     fontSize: 12,
+  },
+  authContainer: {
+    padding: 20,
+    paddingTop: 30,
+    flexGrow: 1,
+    justifyContent: "space-between",
+  },
+  authCard: {
+    backgroundColor: T.white,
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: T.border,
+    alignItems: "center",
+  },
+  authLogoBadge: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: T.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  authPill: {
+    backgroundColor: T.accentBg,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  authPillText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: T.accent,
+    letterSpacing: 0.5,
+  },
+  authTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: T.text1,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  authSubtitle: {
+    fontSize: 12,
+    color: T.text3,
+    textAlign: "center",
+    marginBottom: 18,
+    lineHeight: 16,
+  },
+  authTabRow: {
+    flexDirection: "row",
+    backgroundColor: T.surf2,
+    borderRadius: 12,
+    padding: 4,
+    width: "100%",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: T.border,
+  },
+  authTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderRadius: 8,
+  },
+  authTabBtnActive: {
+    backgroundColor: T.white,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  authTabText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: T.text3,
+  },
+  authTabTextActive: {
+    color: T.text1,
+    fontWeight: "700",
+  },
+  inputGroup: {
+    width: "100%",
+    marginBottom: 12,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: T.text2,
+    marginBottom: 6,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: T.surf2,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: T.border,
+    paddingHorizontal: 12,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  textInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: T.text1,
+  },
+  eyeBtn: {
+    padding: 4,
+  },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: T.critBg,
+    padding: 10,
+    borderRadius: 8,
+    width: "100%",
+    marginBottom: 10,
+  },
+  errorText: {
+    fontSize: 12,
+    color: T.critical,
+  },
+  primaryAuthBtn: {
+    backgroundColor: T.accent,
+    width: "100%",
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+    shadowColor: T.accent,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  btnRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  primaryBtnText: {
+    color: T.white,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  orDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    marginVertical: 16,
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: T.border,
+  },
+  orText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: T.text4,
+    marginHorizontal: 10,
+  },
+  demoAuthBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    width: "100%",
+    backgroundColor: T.white,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: T.border,
+  },
+  demoBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: T.text1,
+  },
+  authFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 16,
+  },
+  authFooterText: {
+    fontSize: 11,
+    color: T.text4,
   },
 });

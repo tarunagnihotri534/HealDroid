@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import rawRules from "@/lib/analyzer/rules.json";
+import { RULE_DEFINITIONS } from "@/lib/analyzer/rules-data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json(rawRules);
+  return NextResponse.json(RULE_DEFINITIONS);
 }
