@@ -124,6 +124,12 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasDigit = /[0-9]/.test(password);
+  const hasMinLen = password.length >= 8;
+  const isPasswordValid = hasUpper && hasLower && hasDigit && hasMinLen;
+
   const handleSubmit = () => {
     setError("");
     if (!email || !password) {
@@ -132,6 +138,10 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
     }
     if (isSignUp && !name) {
       setError("Please enter your name.");
+      return;
+    }
+    if (!isPasswordValid) {
+      setError("Password must contain at least one uppercase letter (A-Z), one lowercase letter (a-z), one digit (0-9), and be at least 8 characters.");
       return;
     }
 
@@ -249,6 +259,38 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
                 {showPassword ? <EyeOff size={16} color={T.text4} /> : <Eye size={16} color={T.text4} />}
               </TouchableOpacity>
             </View>
+
+            {password.length > 0 && (
+              <View style={styles.pwdReqBox}>
+                <Text style={styles.pwdReqTitle}>Password Security Requirements:</Text>
+                <View style={styles.pwdReqGrid}>
+                  <View style={styles.pwdReqItem}>
+                    <Text style={[styles.pwdReqBullet, hasUpper && styles.pwdReqBulletValid]}>
+                      {hasUpper ? "✓" : "•"}
+                    </Text>
+                    <Text style={[styles.pwdReqText, hasUpper && styles.pwdReqTextValid]}>1 Capital (A-Z)</Text>
+                  </View>
+                  <View style={styles.pwdReqItem}>
+                    <Text style={[styles.pwdReqBullet, hasLower && styles.pwdReqBulletValid]}>
+                      {hasLower ? "✓" : "•"}
+                    </Text>
+                    <Text style={[styles.pwdReqText, hasLower && styles.pwdReqTextValid]}>1 Small (a-z)</Text>
+                  </View>
+                  <View style={styles.pwdReqItem}>
+                    <Text style={[styles.pwdReqBullet, hasDigit && styles.pwdReqBulletValid]}>
+                      {hasDigit ? "✓" : "•"}
+                    </Text>
+                    <Text style={[styles.pwdReqText, hasDigit && styles.pwdReqTextValid]}>1 Number (0-9)</Text>
+                  </View>
+                  <View style={styles.pwdReqItem}>
+                    <Text style={[styles.pwdReqBullet, hasMinLen && styles.pwdReqBulletValid]}>
+                      {hasMinLen ? "✓" : "•"}
+                    </Text>
+                    <Text style={[styles.pwdReqText, hasMinLen && styles.pwdReqTextValid]}>8+ Chars</Text>
+                  </View>
+                </View>
+              </View>
+            )}
           </View>
 
           {error ? (
@@ -1122,5 +1164,47 @@ const styles = StyleSheet.create({
   authFooterText: {
     fontSize: 11,
     color: T.text4,
+  },
+  pwdReqBox: {
+    backgroundColor: T.surf2,
+    borderWidth: 1,
+    borderColor: T.border,
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+  },
+  pwdReqTitle: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: T.text3,
+    marginBottom: 6,
+    textTransform: "uppercase",
+  },
+  pwdReqGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  pwdReqItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    width: "47%",
+  },
+  pwdReqBullet: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: T.text4,
+  },
+  pwdReqBulletValid: {
+    color: "#059669",
+  },
+  pwdReqText: {
+    fontSize: 10,
+    color: T.text4,
+  },
+  pwdReqTextValid: {
+    color: "#059669",
+    fontWeight: "600",
   },
 });

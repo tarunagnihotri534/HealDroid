@@ -5,7 +5,12 @@ export const metadata: Metadata = {
   title: "HealDroid - APK Security Assessment & Vulnerability Scanner",
   description: "Static security analysis engine for Android APKs featuring decompilation, vulnerability detection, and OWASP compliance reporting.",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
   },
 };
 

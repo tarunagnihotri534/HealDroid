@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { SpotlightNav } from "@/app/components/ui/spotlight-nav";
 import { ProfileSheet } from "@/app/components/ui/profile-sheet";
+import { HealDroidLogo } from "@/app/components/ui/HealDroidLogo";
 
 // ── DESIGN TOKENS ──────────────────────────────────────────────────────────────
 const T = {
@@ -1837,7 +1838,7 @@ interface AuthUser {
   role: string;
 }
 
-function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+function AuthScreen({ onLogin, embedded = false }: { onLogin: (user: AuthUser) => void; embedded?: boolean }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -1845,6 +1846,12 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasDigit = /[0-9]/.test(password);
+  const hasMinLen = password.length >= 8;
+  const isPasswordValid = hasUpper && hasLower && hasDigit && hasMinLen;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1856,6 +1863,10 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
     }
     if (isSignUp && !name) {
       setError("Please enter your name or organization.");
+      return;
+    }
+    if (!isPasswordValid) {
+      setError("Password must contain at least one uppercase letter (A-Z), one lowercase letter (a-z), one digit (0-9), and be at least 8 characters.");
       return;
     }
 
@@ -1883,24 +1894,20 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
   };
 
   return (
-    <div className="flex justify-center" style={{ backgroundColor: "#E8EAF0", minHeight: "100dvh" }}>
+    <div className={`flex justify-center ${embedded ? "w-full h-full" : "min-h-[100dvh]"}`} style={{ backgroundColor: embedded ? T.bg : "#E8EAF0" }}>
       <div
         className="relative w-full max-w-[430px] flex flex-col justify-between"
-        style={{ height: "100dvh", overflowY: "auto", backgroundColor: T.bg, padding: "env(safe-area-inset-top, 24px) 20px 24px 20px" }}
+        style={{
+          height: embedded ? "100%" : "100dvh",
+          overflowY: "auto",
+          backgroundColor: T.bg,
+          padding: embedded ? "36px 16px 20px 16px" : "env(safe-area-inset-top, 24px) 20px 24px 20px",
+        }}
       >
         <div className="flex flex-col items-center pt-6">
-          {/* Logo Badge */}
-          <div
-            className="flex items-center justify-center relative mb-3"
-            style={{
-              width: 58,
-              height: 58,
-              borderRadius: 18,
-              backgroundColor: T.accent,
-              boxShadow: "0 8px 24px rgba(19,184,166,0.35)",
-            }}
-          >
-            <Shield size={32} color={T.white} />
+          {/* Logo Badge: Green H */}
+          <div className="mb-3 hover:scale-105 transition-transform">
+            <HealDroidLogo size={58} variant="green" />
           </div>
 
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-2" style={{ backgroundColor: T.accentBg }}>
@@ -2029,6 +2036,39 @@ function AuthScreen({ onLogin }: { onLogin: (user: AuthUser) => void }) {
                   {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
+
+              {/* Real-time Strong Password Requirement Indicators */}
+              {password.length > 0 && (
+                <div className="p-2.5 rounded-xl mt-2 space-y-1 text-[11px]" style={{ backgroundColor: T.surf2, border: `1px solid ${T.border}` }}>
+                  <p className="font-semibold text-[10px] uppercase mb-1" style={{ color: T.text3, fontFamily: ui }}>Password Security Requirements:</p>
+                  <div className="grid grid-cols-2 gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] ${hasUpper ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                        {hasUpper ? '✓' : '•'}
+                      </span>
+                      <span style={{ color: hasUpper ? '#059669' : T.text4, fontFamily: ui }}>1 Capital letter (A-Z)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] ${hasLower ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                        {hasLower ? '✓' : '•'}
+                      </span>
+                      <span style={{ color: hasLower ? '#059669' : T.text4, fontFamily: ui }}>1 Small letter (a-z)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] ${hasDigit ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                        {hasDigit ? '✓' : '•'}
+                      </span>
+                      <span style={{ color: hasDigit ? '#059669' : T.text4, fontFamily: ui }}>1 Number (0-9)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] ${hasMinLen ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                        {hasMinLen ? '✓' : '•'}
+                      </span>
+                      <span style={{ color: hasMinLen ? '#059669' : T.text4, fontFamily: ui }}>8+ Characters</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {error && (
@@ -2109,7 +2149,12 @@ const NAV_ITEMS = [
   { icon: BookOpen, label: "Rules" },
 ];
 
-export default function App() {
+export interface AppProps {
+  embedded?: boolean;
+  onBackToLanding?: () => void;
+}
+
+export default function App({ embedded = false, onBackToLanding }: AppProps = {}) {
   const [user, setUser] = useState<AuthUser | null>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("healdroid_user");
@@ -2186,15 +2231,22 @@ export default function App() {
   };
 
   if (!user) {
-    return <AuthScreen onLogin={handleLogin} />;
+    return <AuthScreen onLogin={handleLogin} embedded={embedded} />;
   }
 
   return (
-    <div className="flex justify-center" style={{ backgroundColor: "#E8EAF0", minHeight: "100dvh" }}>
+    <div
+      className={`flex justify-center ${embedded ? "w-full h-full" : "min-h-[100dvh]"}`}
+      style={{ backgroundColor: embedded ? T.bg : "#E8EAF0" }}
+    >
       {/* phone shell */}
       <div
         className="relative w-full max-w-[430px] flex flex-col"
-        style={{ height: "100dvh", overflow: "hidden", backgroundColor: T.bg }}
+        style={{
+          height: embedded ? "100%" : "100dvh",
+          overflow: "hidden",
+          backgroundColor: T.bg,
+        }}
       >
         {/* ── TOP BAR — safe-area aware ── */}
         <div
@@ -2203,24 +2255,31 @@ export default function App() {
             backgroundColor: T.white,
             borderBottom: `1px solid ${T.border}`,
             boxShadow: T.shadow,
-            paddingTop: "env(safe-area-inset-top, 0px)",
+            paddingTop: embedded ? "24px" : "env(safe-area-inset-top, 0px)",
           }}
         >
           <div
-            className="flex items-center justify-between px-5"
+            className="flex items-center justify-between px-4"
             style={{ height: 52 }}
           >
-            <div
-              className="flex items-center justify-center cursor-pointer"
-              style={{
-                width: 36, height: 36,
-                borderRadius: 11,
-                backgroundColor: T.accentBg,
-              }}
-              onClick={() => setNavIdx(0)}
-            >
-              <Shield className="w-5 h-5" style={{ color: T.accent }} strokeWidth={2} />
-            </div>
+            {onBackToLanding ? (
+              <button
+                type="button"
+                onClick={onBackToLanding}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+                title="Back to Landing Page"
+              >
+                <ArrowLeft size={14} />
+                <span>Overview</span>
+              </button>
+            ) : (
+              <div
+                className="flex items-center justify-center cursor-pointer hover:scale-105 transition-transform"
+                onClick={() => setNavIdx(0)}
+              >
+                <HealDroidLogo size={32} variant="green" />
+              </div>
+            )}
 
             <div className="text-center flex items-center justify-center gap-1.5">
               <span className="text-xs font-bold tracking-tight" style={{ color: T.text1, fontFamily: ui }}>HealDroid</span>

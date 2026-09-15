@@ -33,7 +33,7 @@ export interface ManifestData {
 }
 
 export interface DecompileStats {
-  status: "pending" | "decompiling" | "complete" | "failed";
+  status: "pending" | "decompiling" | "complete" | "partial" | "failed";
   method: "jadx" | "raw_source" | "dex_strings" | "none";
   file_count: number;
   time_taken_seconds: number;
