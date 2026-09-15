@@ -182,14 +182,14 @@ export function LandingPage({ onOpenApp, renderAppContent }: LandingPageProps) {
       </header>
 
       {/* ── HERO SECTION (EXACT SCREENSHOT 1 VEIL ALIGNMENT & STORYTELLING) ── */}
-      <section className="relative pt-12 pb-20 md:pt-20 md:pb-28 overflow-hidden bg-subtle-grid">
+      <section className="relative pt-6 pb-12 sm:pt-8 sm:pb-16 md:pt-10 md:pb-18 overflow-hidden bg-subtle-grid">
         {/* Soft background glow */}
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[650px] bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center">
             {/* Left Column: Pitch & Story */}
-            <div className="lg:col-span-6 space-y-6 text-center lg:text-left">
+            <div className="lg:col-span-6 space-y-5 text-center lg:text-left">
               {/* Early Access Status Pill */}
               <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/90 border border-stone-200/80 text-xs font-medium text-stone-700 shadow-xs">
                 <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
@@ -197,20 +197,19 @@ export function LandingPage({ onOpenApp, renderAppContent }: LandingPageProps) {
               </div>
 
               {/* Headline with Playfair Display Italic */}
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-stone-950 leading-[1.12]">
-                Secure by<br />
-                design.<br />
+              <h1 className="text-3xl sm:text-5xl lg:text-[54px] font-bold tracking-tight text-stone-950 leading-[1.14]">
+                Decompile binaries.<br />
                 <span
-                  className="font-serif italic font-normal text-stone-700"
+                  className="font-serif italic font-normal text-teal-800"
                   style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
                 >
-                  Resilient by nature.
+                  Heal vulnerabilities.
                 </span>
               </h1>
 
               {/* Subtitle */}
-              <p className="text-base sm:text-lg text-stone-500 max-w-xl mx-auto lg:mx-0 leading-relaxed font-normal">
-                Static security analysis engineered specifically for Android APKs. Decompile binaries, hunt OWASP Mobile Top 10 vulnerabilities, and generate compliant developer fixes. Quietly, swiftly, and entirely on your terms.
+              <p className="text-sm sm:text-base text-stone-500 max-w-xl mx-auto lg:mx-0 leading-relaxed font-normal">
+                Static application security testing engineered specifically for Android APKs. Decompile bytecode, hunt OWASP Mobile Top 10 vulnerabilities, and generate compliant developer patches in seconds.
               </p>
 
               {/* Action Buttons */}

@@ -1901,38 +1901,38 @@ function AuthScreen({ onLogin, embedded = false }: { onLogin: (user: AuthUser) =
           height: embedded ? "100%" : "100dvh",
           overflowY: "auto",
           backgroundColor: T.bg,
-          padding: embedded ? "36px 16px 20px 16px" : "env(safe-area-inset-top, 24px) 20px 24px 20px",
+          padding: embedded ? "20px 14px 14px 14px" : "env(safe-area-inset-top, 24px) 20px 24px 20px",
         }}
       >
-        <div className="flex flex-col items-center pt-6">
+        <div className={`flex flex-col items-center ${embedded ? "pt-2" : "pt-6"}`}>
           {/* Logo Badge: Green H */}
-          <div className="mb-3 hover:scale-105 transition-transform">
-            <HealDroidLogo size={58} variant="green" />
+          <div className={`${embedded ? "mb-2" : "mb-3"} hover:scale-105 transition-transform`}>
+            <HealDroidLogo size={embedded ? 46 : 58} variant="green" />
           </div>
 
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-2" style={{ backgroundColor: T.accentBg }}>
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: T.accent }} />
-            <span className="text-[11px] font-bold tracking-wider" style={{ color: T.accent, fontFamily: ui }}>HEALDROID PORTAL</span>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full mb-1.5" style={{ backgroundColor: T.accentBg }}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: T.accent }} />
+            <span className="text-[10px] font-bold tracking-wider" style={{ color: T.accent, fontFamily: ui }}>HEALDROID PORTAL</span>
           </div>
 
-          <h1 className="text-xl font-bold text-center" style={{ color: T.text1, fontFamily: ui }}>
+          <h1 className={`${embedded ? "text-lg" : "text-xl"} font-bold text-center`} style={{ color: T.text1, fontFamily: ui }}>
             {isSignUp ? "Create Auditor Account" : "Access Security Portal"}
           </h1>
-          <p className="text-xs text-center mt-1 max-w-[300px]" style={{ color: T.text3, fontFamily: ui }}>
+          <p className="text-[11px] text-center mt-0.5 max-w-[280px]" style={{ color: T.text3, fontFamily: ui }}>
             {isSignUp
-              ? "Register to start running static APK vulnerability assessments & compliance scans."
+              ? "Register to start running static APK vulnerability assessments."
               : "Sign in to access your decompilation workspace and security findings."}
           </p>
 
           {/* Tab Selector */}
           <div
-            className="w-full flex p-1 rounded-xl mt-5 mb-4"
+            className={`w-full flex p-0.5 rounded-xl ${embedded ? "mt-3 mb-2.5" : "mt-5 mb-4"}`}
             style={{ backgroundColor: T.surf2, border: `1px solid ${T.border}` }}
           >
             <button
               type="button"
               onClick={() => { setIsSignUp(false); setError(""); }}
-              className="flex-1 py-2 text-xs font-semibold rounded-lg transition-all"
+              className="flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all"
               style={{
                 backgroundColor: !isSignUp ? T.white : "transparent",
                 color: !isSignUp ? T.text1 : T.text3,
@@ -2101,17 +2101,17 @@ function AuthScreen({ onLogin, embedded = false }: { onLogin: (user: AuthUser) =
           </form>
 
           {/* Quick 1-Tap Demo Login Button */}
-          <div className="w-full mt-3">
-            <div className="relative flex py-2 items-center">
+          <div className={`w-full ${embedded ? "mt-2" : "mt-3"}`}>
+            <div className={`relative flex ${embedded ? "py-1" : "py-2"} items-center`}>
               <div className="flex-grow border-t" style={{ borderColor: T.border }}></div>
-              <span className="flex-shrink mx-3 text-[10px] uppercase font-bold" style={{ color: T.text4, fontFamily: ui }}>OR Instant Access</span>
+              <span className="flex-shrink mx-2.5 text-[9px] uppercase font-bold" style={{ color: T.text4, fontFamily: ui }}>OR Instant Access</span>
               <div className="flex-grow border-t" style={{ borderColor: T.border }}></div>
             </div>
 
             <button
               type="button"
               onClick={handleDemoLogin}
-              className="w-full py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all mt-1 cursor-pointer"
+              className={`w-full ${embedded ? "py-2" : "py-2.5"} rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all mt-0.5 cursor-pointer`}
               style={{
                 backgroundColor: T.white,
                 border: `1px solid ${T.border}`,
@@ -2120,16 +2120,16 @@ function AuthScreen({ onLogin, embedded = false }: { onLogin: (user: AuthUser) =
                 boxShadow: T.shadow,
               }}
             >
-              <Sparkles size={14} style={{ color: T.accent }} />
+              <Sparkles size={13} style={{ color: T.accent }} />
               <span>Enter as Security Auditor (1-Click Demo)</span>
             </button>
           </div>
         </div>
 
         {/* Security Footer Note */}
-        <div className="text-center pt-3 pb-1">
-          <div className="inline-flex items-center justify-center gap-1 text-[10px]" style={{ color: T.text4, fontFamily: ui }}>
-            <Shield size={11} style={{ color: T.accent }} />
+        <div className={`text-center ${embedded ? "pt-1.5 pb-0" : "pt-3 pb-1"}`}>
+          <div className="inline-flex items-center justify-center gap-1 text-[9px] sm:text-[10px]" style={{ color: T.text4, fontFamily: ui }}>
+            <Shield size={10} style={{ color: T.accent }} />
             <span>256-Bit Encrypted Session · ISO 27001 & OWASP Aligned</span>
           </div>
         </div>
