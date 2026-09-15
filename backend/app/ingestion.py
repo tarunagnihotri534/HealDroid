@@ -34,8 +34,7 @@ def create_job(upload_file: UploadFile) -> tuple[str, Path, Path]:
     
     apk_path = job_dir / "app.apk"
     with open(apk_path, "wb") as f:
-        content = upload_file.file.read()
-        f.write(content)
+        shutil.copyfileobj(upload_file.file, f, length=1024 * 1024)
         
     # Validation: must be a valid zip archive
     if not zipfile.is_zipfile(apk_path):

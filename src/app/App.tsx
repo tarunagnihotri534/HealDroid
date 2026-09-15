@@ -110,6 +110,7 @@ export interface JobData {
   error?: string;
   current_stage?: "ingestion" | "manifest" | "decompiling" | "rules" | "scoring" | "complete";
   stage_message?: string;
+  scan_mode?: "lightning" | "standard" | "deep";
 }
 
 const DEFAULT_RULES: RuleItem[] = [
@@ -501,8 +502,10 @@ function ScoreArc({ score, grade }: { score: number; grade: string }) {
 // ── SCREENS ───────────────────────────────────────────────────────────────────
 function UploadScreen({
   onScan,
+  backendOnline,
 }: {
   onScan: (file: File | null, fileName: string, mode?: "lightning" | "standard" | "deep") => void;
+  backendOnline?: boolean | null;
 }) {
   const [scanMode,     setScanMode]     = useState<"lightning" | "standard" | "deep">("standard");
   const [dragging,     setDragging]     = useState(false);
@@ -532,6 +535,12 @@ function UploadScreen({
           Static APK security engine with JADX decompilation & OWASP Mobile Top 10 rule runner.
         </p>
       </div>
+
+      {backendOnline === false && (
+        <AlertBar type="error">
+          <strong>Backend Disconnected:</strong> FastAPI engine is not reachable on port 8000. Ensure the Python server is running to scan APKs.
+        </AlertBar>
+      )}
 
       <input
         type="file"
@@ -796,6 +805,23 @@ async function getSha256(blob: Blob): Promise<string> {
   }
 }
 
+async function apiFetch(endpoint: string, options?: RequestInit): Promise<Response> {
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  try {
+    const res = await fetch(cleanEndpoint, options);
+    if (res.status > 0 && res.status < 500) {
+      return res;
+    }
+    if (res.ok) return res;
+  } catch (_) {
+    // Relative proxy path failed (e.g. dev server proxy socket error)
+  }
+
+  // Fallback directly to FastAPI backend on 127.0.0.1:8000
+  const directUrl = `http://127.0.0.1:8000${cleanEndpoint}`;
+  return await fetch(directUrl, options);
+}
+
 function ProcessingScreen({
   file,
   fileName,
@@ -881,213 +907,139 @@ function ProcessingScreen({
         setStages(["complete", "active", "pending", "pending", "pending"]);
         addLog(`[manifest] Initiating binary AXML extraction...`);
 
-        let backendAvailable = false;
         let initialJob: JobData | null = null;
 
         try {
-          const uploadRes = await fetch("/api/upload", {
+          addLog(`[ingest] Transmitting APK payload to HealDroid FastAPI engine (Port 8000)...`);
+          const uploadRes = await apiFetch("/api/upload", {
             method: "POST",
             body: formData,
           });
 
-          if (uploadRes.ok) {
-            backendAvailable = true;
-            initialJob = await uploadRes.json();
+          if (!uploadRes.ok) {
+            let detail = `Server responded with HTTP ${uploadRes.status}`;
+            try {
+              const errJson = await uploadRes.json();
+              if (errJson.detail) detail = errJson.detail;
+            } catch (_) {}
+            throw new Error(detail);
           }
-        } catch (e) {
-          backendAvailable = false;
+
+          initialJob = await uploadRes.json();
+        } catch (uploadErr: any) {
+          if (cancelled) return;
+          const errMsg = uploadErr?.message || "Connection refused";
+          addLog(`[error] FastAPI engine unreachable: ${errMsg}`);
+          setError(`Backend Disconnected: Unable to reach FastAPI backend on port 8000 (${errMsg}). Please verify that the backend server is running.`);
+          setStages(["complete", "pending", "pending", "pending", "pending"]);
+          return;
         }
 
-        if (cancelled) return;
+        if (cancelled || !initialJob) return;
 
-        if (backendAvailable && initialJob) {
-          // ── REAL FASTAPI BACKEND (JADX + ANDROGUARD PIPELINE) ──────────────
-          addLog(`[backend] Connected to FastAPI backend engine (Job ID: ${initialJob.job_id}, Profile: ${scanMode.toUpperCase()})`);
-          addLog(`[manifest] Parsing AndroidManifest.xml via Androguard...`);
-          
-          let pollCount = 0;
-          let currentClientStage = "manifest";
-          pollInterval = setInterval(async () => {
+        // ── AUTHENTIC FASTAPI BACKEND PIPELINE (JADX + ANDROGUARD) ──────────────
+        addLog(`[backend] Connected to FastAPI backend engine (Job ID: ${initialJob.job_id}, Profile: ${scanMode.toUpperCase()})`);
+        if (scanMode === "deep") {
+          addLog(`[jadx] 🛡️ Deep Audit Profile: 3x Resource Allocation engaged (2,304 MB JVM Heap, 4 worker threads, 180s timeout, AST code scan up to 5,000 classes)`);
+        } else if (scanMode === "standard") {
+          addLog(`[jadx] 🎯 Standard Profile: 768 MB JVM Heap hard cap, 2 worker threads, 90s timeout, app-scoped code scan`);
+        } else {
+          addLog(`[jadx] ⚡ Lightning Profile: Fast manifest & attack surface triage (decompilation bypassed)`);
+        }
+        addLog(`[manifest] Parsing AndroidManifest.xml via Androguard...`);
+        
+        let pollCount = 0;
+        let currentClientStage = "manifest";
+        pollInterval = setInterval(async () => {
+          if (cancelled) return;
+          pollCount++;
+          try {
+            const statusRes = await apiFetch(`/api/jobs/${initialJob?.job_id}`);
+            if (!statusRes.ok) return;
+            const updatedJob: JobData = await statusRes.json();
             if (cancelled) return;
-            pollCount++;
-            try {
-              const statusRes = await fetch(`/api/jobs/${initialJob?.job_id}`);
-              if (!statusRes.ok) return;
-              const updatedJob: JobData = await statusRes.json();
-              if (cancelled) return;
-              setJobData(updatedJob);
+            setJobData(updatedJob);
 
-              const stage = updatedJob.current_stage || "manifest";
+            const stage = updatedJob.current_stage || "manifest";
 
-              // ── Active stage transition tracking ──
-              if (scanMode === "lightning") {
-                if (stage === "rules" || stage === "scoring" || updatedJob.status === "complete") {
-                  if (currentClientStage !== "rules") {
-                    currentClientStage = "rules";
-                    setStages(["complete", "complete", "complete", "active", "pending"]);
-                    addLog(`[jadx] ⚡ Lightning Profile: Decompilation bypassed for rapid triage.`);
-                    addLog(`[scanner] Evaluating manifest attack surface and exported component rules...`);
-                  }
-                }
-              } else {
-                if (stage === "decompiling" && currentClientStage !== "decompiling") {
-                  currentClientStage = "decompiling";
-                  setStages(["complete", "complete", "active", "pending", "pending"]);
-                  addLog(`[jadx] Spawning JADX AST decompiler subprocess (timeout=90s)...`);
-                  addLog(`[jadx] Extracting Dalvik bytecode (classes.dex) -> Java source AST (${scanMode} profile)...`);
-                } else if (stage === "decompiling" && pollCount % 4 === 0) {
-                  const elapsedSec = (pollCount * 1.2).toFixed(0);
-                  addLog(`[jadx] Decompilation in progress: parsing DEX classes & syntax trees (${elapsedSec}s elapsed)...`);
-                } else if (stage === "rules" && currentClientStage !== "rules") {
+            // ── Active stage transition tracking ──
+            if (scanMode === "lightning") {
+              if (stage === "rules" || stage === "scoring" || updatedJob.status === "complete") {
+                if (currentClientStage !== "rules") {
                   currentClientStage = "rules";
                   setStages(["complete", "complete", "complete", "active", "pending"]);
-                  const fc = updatedJob.decompilation?.file_count || 0;
-                  if (fc > 0) addLog(`[jadx] Decompilation phase finished (${fc.toLocaleString()} files extracted).`);
-                  addLog(`[scanner] Streaming decompiled classes into OWASP AST rule runner (${scanMode} profile)...`);
-                  addLog(`[scanner] Evaluating 25+ pattern detectors across M1–M10 benchmark...`);
-                } else if (stage === "scoring" && currentClientStage !== "scoring") {
-                  currentClientStage = "scoring";
-                  setStages(["complete", "complete", "complete", "complete", "active"]);
+                  addLog(`[jadx] ⚡ Lightning Profile: Decompilation bypassed for rapid triage.`);
+                  addLog(`[scanner] Evaluating manifest attack surface and exported component rules...`);
                 }
               }
-
-              if (updatedJob.status === "complete" || updatedJob.status === "partial") {
-                clearInterval(pollInterval);
-                
-                // Manifest highlights
-                const pkg = updatedJob.manifest?.package_name || updatedJob.app_name;
-                addLog(`[manifest] Package identifier: ${pkg}`);
-                addLog(`[manifest] Declared permissions: ${updatedJob.manifest?.permissions.length || 0}, components: ${updatedJob.manifest?.components.length || 0}`);
-                if (updatedJob.manifest?.debuggable) addLog(`[manifest] ⚠ Flag detected: android:debuggable="true"`);
-                if (updatedJob.manifest?.uses_cleartext_traffic) addLog(`[manifest] ⚠ Flag detected: android:usesCleartextTraffic="true"`);
-
-                // Decompiler stats
-                if (scanMode === "lightning" || updatedJob.decompilation?.status === "skipped") {
-                  addLog(`[jadx] ⚡ Decompilation: Bypassed for Lightning Triage mode (0.00s)`);
-                } else {
-                  const fileCnt = updatedJob.decompilation?.file_count || 0;
-                  const timeSec = updatedJob.decompilation?.time_taken_seconds || 0;
-                  addLog(`[jadx] Decompilation completed: ${fileCnt.toLocaleString()} source files extracted in ${timeSec}s`);
-                }
-
-                // Rule engine results
-                addLog(`[rules] Static rule engine evaluation completed.`);
-                addLog(`[rules] Identified ${updatedJob.findings.length} security findings across decompiled classes:`);
-                
-                updatedJob.findings.slice(0, 4).forEach(f => {
-                  addLog(`[rules] • [${f.severity.toUpperCase()}] ${f.id} (${f.location})`);
-                });
-
-                // Final Score & Report
-                setStages(["complete", "complete", "complete", "complete", "complete"]);
-                addLog(`[scoring] Calculated weighted risk score: ${updatedJob.score}/100 (Grade ${updatedJob.grade})`);
-                addLog(`[report] Security assessment report generated with actionable remediation snippets.`);
-                addLog(`[pipeline] Complete analysis cycle finished successfully.`);
-                setDone(true);
-              } else if (updatedJob.status === "failed") {
-                clearInterval(pollInterval);
-                setStages(["complete", "complete", "complete", "complete", "complete"]);
-                addLog(`[pipeline] ⚠ Analysis error: ${updatedJob.error || "Processing failed"}`);
-                setDone(true);
+            } else {
+              if (stage === "decompiling" && currentClientStage !== "decompiling") {
+                currentClientStage = "decompiling";
+                setStages(["complete", "complete", "active", "pending", "pending"]);
+                const memLabel = scanMode === "deep" ? "2,304 MB JVM heap (3x)" : "768 MB JVM heap";
+                const thLabel = scanMode === "deep" ? "4 threads" : "2 threads";
+                const toLabel = scanMode === "deep" ? "180s" : "90s";
+                addLog(`[jadx] Spawning JADX AST decompiler (${memLabel}, ${thLabel}, timeout=${toLabel})...`);
+                addLog(`[jadx] Extracting Dalvik bytecode (classes.dex) -> Java source AST (${scanMode} profile)...`);
+              } else if (stage === "decompiling" && pollCount % 4 === 0) {
+                const elapsedSec = (pollCount * 1.2).toFixed(0);
+                addLog(`[jadx] Decompilation in progress: parsing DEX classes & syntax trees (${elapsedSec}s elapsed)...`);
+              } else if (stage === "rules" && currentClientStage !== "rules") {
+                currentClientStage = "rules";
+                setStages(["complete", "complete", "complete", "active", "pending"]);
+                const fc = updatedJob.decompilation?.file_count || 0;
+                if (fc > 0) addLog(`[jadx] Decompilation phase finished (${fc.toLocaleString()} files extracted).`);
+                addLog(`[scanner] Streaming decompiled classes into OWASP AST rule runner (${scanMode} profile)...`);
+                addLog(`[scanner] Evaluating 25+ pattern detectors across M1–M10 benchmark...`);
+              } else if (stage === "scoring" && currentClientStage !== "scoring") {
+                currentClientStage = "scoring";
+                setStages(["complete", "complete", "complete", "complete", "active"]);
               }
-            } catch (e) {}
-          }, 1200);
+            }
 
-        } else {
-          // ── STANDALONE / VERIFIED FALLBACK ENGINE (WITH REALISTIC STAGING) ──
-          addLog(`[engine] Standalone engine running client-side inspection...`);
-          
-          // Derive realistic app identity from uploaded filename
-          const cleanName = fileName.replace(/\.apk$/i, "");
-          const derivedPkg = cleanName.includes(".") ? cleanName : `com.android.${cleanName.toLowerCase()}`;
-          
-          await delay(1500);
-          if (cancelled) return;
-          setStages(["complete", "complete", "active", "pending", "pending"]);
-          addLog(`[manifest] Package identifier: ${derivedPkg}`);
-          addLog(`[manifest] Target SDK: 33 (Android 13), Min SDK: 24 (Android 7.0)`);
-          addLog(`[manifest] Declared 10 permissions, 4 exported components without signature guard`);
-          addLog(`[manifest] ⚠ Critical: Exported activity DeepLinkActivity accepts unverified deep links`);
+            if (updatedJob.status === "complete" || updatedJob.status === "partial") {
+              clearInterval(pollInterval);
+              
+              // Manifest highlights
+              const pkg = updatedJob.manifest?.package_name || updatedJob.app_name;
+              addLog(`[manifest] Package identifier: ${pkg}`);
+              addLog(`[manifest] Declared permissions: ${updatedJob.manifest?.permissions.length || 0}, components: ${updatedJob.manifest?.components.length || 0}`);
+              if (updatedJob.manifest?.debuggable) addLog(`[manifest] ⚠ Flag detected: android:debuggable="true"`);
+              if (updatedJob.manifest?.uses_cleartext_traffic) addLog(`[manifest] ⚠ Flag detected: android:usesCleartextTraffic="true"`);
 
-          await delay(1600);
-          if (cancelled) return;
-          setStages(["complete", "complete", "complete", "active", "pending"]);
-          addLog(`[jadx] JADX source decompiler processed DEX bytecode`);
-          addLog(`[jadx] Decompiled 12 classes into structured Java source tree (1.42s)`);
+              // Decompiler stats
+              if (scanMode === "lightning" || updatedJob.decompilation?.status === "skipped") {
+                addLog(`[jadx] ⚡ Decompilation: Bypassed for Lightning Triage mode (0.00s)`);
+              } else {
+                const fileCnt = updatedJob.decompilation?.file_count || 0;
+                const timeSec = updatedJob.decompilation?.time_taken_seconds || 0;
+                addLog(`[jadx] Decompilation completed: ${fileCnt.toLocaleString()} source files extracted in ${timeSec}s`);
+              }
 
-          await delay(1600);
-          if (cancelled) return;
-          setStages(["complete", "complete", "complete", "complete", "active"]);
-          addLog(`[scanner] Scanning AST for OWASP Mobile Top 10 flaws...`);
-          addLog(`[scanner] MATCH: [CRITICAL] Hardcoded AWS access key (AKIA...)`);
-          addLog(`[scanner] MATCH: [HIGH] Google / Firebase API Key (AIza...)`);
-          addLog(`[scanner] MATCH: [HIGH] Cleartext HTTP endpoint usage in NetworkClient.java`);
-          addLog(`[scanner] MATCH: [HIGH] Unencrypted SQLite database queries (SQL injection)`);
-          addLog(`[scanner] MATCH: [HIGH] Exported components lacking signature permission`);
+              // Rule engine results
+              addLog(`[rules] Static rule engine evaluation completed.`);
+              addLog(`[rules] Identified ${updatedJob.findings.length} security findings across decompiled classes:`);
+              
+              updatedJob.findings.slice(0, 4).forEach(f => {
+                addLog(`[rules] • [${f.severity.toUpperCase()}] ${f.id} (${f.location})`);
+              });
 
-          await delay(1400);
-          if (cancelled) return;
-
-          const fallbackFindings = SAMPLE_VULNERABILITY_FINDINGS.map(f => ({
-            ...f,
-            location: f.location.replace("com.test.vulnerableapp", derivedPkg),
-          }));
-
-          const fallbackJob: JobData = {
-            job_id: "sec-" + Math.random().toString(36).substring(2, 9),
-            app_name: cleanName,
-            file_size_bytes: targetBlob ? targetBlob.size : 7462,
-            status: "complete",
-            score: 25,
-            grade: "F",
-            decompilation_incomplete: false,
-            decompilation_warnings: [],
-            findings: fallbackFindings,
-            summary: {
-              critical: 4,
-              high: 11,
-              medium: 7,
-              low: 0,
-            },
-            manifest: {
-              package_name: derivedPkg,
-              target_sdk_version: 33,
-              target_sdk: "33",
-              debuggable: true,
-              allow_backup: true,
-              uses_cleartext_traffic: true,
-              permissions: [
-                "android.permission.INTERNET",
-                "android.permission.SEND_SMS",
-                "android.permission.READ_SMS",
-                "android.permission.READ_CONTACTS",
-                "android.permission.ACCESS_FINE_LOCATION",
-                "android.permission.RECORD_AUDIO",
-                "android.permission.CAMERA",
-                "android.permission.READ_PHONE_STATE",
-              ],
-              components: [
-                { name: `${derivedPkg}.DeepLinkActivity`, type: "activity", exported: true, intent_filters: ["android.intent.action.VIEW"] },
-                { name: `${derivedPkg}.PushReceiver`, type: "receiver", exported: true, intent_filters: ["ACTION_PUSH"] },
-                { name: `${derivedPkg}.SyncService`, type: "service", exported: true, intent_filters: [] },
-                { name: `${derivedPkg}.UserProvider`, type: "provider", exported: true, intent_filters: [] },
-              ],
-            },
-            decompilation: {
-              status: "complete",
-              method: "jadx",
-              file_count: 12,
-              time_taken_seconds: 1.42,
-            },
-          };
-
-          setJobData(fallbackJob);
-          setStages(["complete", "complete", "complete", "complete", "complete"]);
-          addLog(`[scoring] Computed security risk score: 25/100 (Grade F)`);
-          addLog(`[report] Security report compiled with ${fallbackFindings.length} actionable developer remediations.`);
-          addLog(`[pipeline] Complete analysis cycle finished successfully.`);
-          setDone(true);
-        }
+              // Final Score & Report
+              setStages(["complete", "complete", "complete", "complete", "complete"]);
+              addLog(`[scoring] Calculated weighted risk score: ${updatedJob.score}/100 (Grade ${updatedJob.grade})`);
+              addLog(`[report] Security assessment report generated with actionable remediation snippets.`);
+              addLog(`[pipeline] Complete analysis cycle finished successfully.`);
+              setDone(true);
+            } else if (updatedJob.status === "failed") {
+              clearInterval(pollInterval);
+              setStages(["complete", "complete", "complete", "complete", "complete"]);
+              const failErr = updatedJob.error || "Processing failed";
+              addLog(`[pipeline] ⚠ Analysis error: ${failErr}`);
+              setError(`Analysis Failed: ${failErr}`);
+              setDone(true);
+            }
+          } catch (e) {}
+        }, 1200);
 
       } catch (err: any) {
         if (cancelled) return;
@@ -1160,6 +1112,26 @@ function ProcessingScreen({
           )}
         </div>
       </Card>
+
+      {/* Backend / Scan Error Alert */}
+      {error && (
+        <Card className="p-5 space-y-3" style={{ border: `1.5px solid ${T.critical}` }}>
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "rgba(240,68,56,0.12)", color: T.critical }}>
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-bold" style={{ color: T.critical, fontFamily: ui }}>Analysis Engine Alert</h3>
+              <p className="text-xs mt-1 leading-relaxed" style={{ color: T.text2, fontFamily: ui }}>{error}</p>
+            </div>
+          </div>
+          <div className="pt-1 flex gap-2">
+            <PrimaryBtn onClick={onReset} full>
+              <RefreshCw className="w-4 h-4" /> Return to Scan Screen
+            </PrimaryBtn>
+          </div>
+        </Card>
+      )}
 
       {/* Partial scan / warnings alert */}
       {jobData?.decompilation_incomplete && (
@@ -1843,6 +1815,25 @@ export default function App() {
   const [scanMode,     setScanMode]     = useState<"lightning" | "standard" | "deep">("standard");
   const [scanId,       setScanId]       = useState<number>(0);
   const [jobData,      setJobData]      = useState<JobData | null>(null);
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function checkHealth() {
+      try {
+        const res = await apiFetch("/api/health");
+        if (active) setBackendOnline(res.ok);
+      } catch (_) {
+        if (active) setBackendOnline(false);
+      }
+    }
+    checkHealth();
+    const timer = setInterval(checkHealth, 5000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   const screen = NAV_SCREENS[navIdx];
 
@@ -1888,9 +1879,20 @@ export default function App() {
               <Shield className="w-5 h-5" style={{ color: T.accent }} strokeWidth={2} />
             </div>
 
-            <div className="text-center">
+            <div className="text-center flex items-center justify-center gap-1.5">
               <span className="text-xs font-bold tracking-tight" style={{ color: T.text1, fontFamily: ui }}>HealDroid</span>
-              <span className="text-[10px] ml-1.5 font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: T.surf2, color: T.text3, fontFamily: mono }}>v2.4</span>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: T.surf2, color: T.text3, fontFamily: mono }}>v2.4</span>
+              {backendOnline === true ? (
+                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: "rgba(16,185,129,0.12)", color: "#059669" }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  API :8000
+                </span>
+              ) : backendOnline === false ? (
+                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: "rgba(239,68,68,0.12)", color: "#DC2626" }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                  Offline
+                </span>
+              ) : null}
             </div>
 
             <button
@@ -1921,7 +1923,7 @@ export default function App() {
         {/* ── CONTENT ── */}
         <div className="flex-1 overflow-hidden relative" style={{ minHeight: 0 }}>
           <div className={screen === "upload" ? "h-full flex flex-col overflow-hidden" : "hidden"}>
-            <UploadScreen onScan={handleStartScan} />
+            <UploadScreen onScan={handleStartScan} backendOnline={backendOnline} />
           </div>
           <div className={screen === "processing" ? "h-full flex flex-col overflow-hidden" : "hidden"}>
             <ProcessingScreen

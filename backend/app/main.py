@@ -79,7 +79,7 @@ def process_apk_job(job_id: str, apk_path: Path, job_dir: Path, original_filenam
                 JOBS[job_id].stage_message = f"Decompiling Dalvik bytecode into Java source AST ({mode_label})..."
 
             try:
-                decomp_stats = decompile_apk(apk_path, job_dir)
+                decomp_stats = decompile_apk(apk_path, job_dir, scan_mode=scan_mode)
             except Exception as e:
                 logger.error(f"Decompilation failed for job {job_id}: {e}")
                 decomp_stats = DecompileStats(

@@ -153,5 +153,6 @@ def extract_code_files(
                 excludes.append(v)
         return extractor.iter_files(exclude_packages=excludes, max_files=1000)
     else:
-        return extractor.iter_files(max_files=3000)
+        # Deep audit mode: 3x deeper inspection across up to 5,000 classes
+        return extractor.iter_files(max_files=5000)
 

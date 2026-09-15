@@ -63,12 +63,28 @@ def _extract_raw_java_source(apk_path: Path, output_dir: Path) -> int:
                 count += 1
     return count
 
-def decompile_apk(apk_path: Path, job_dir: Path, timeout: int = TIMEOUT_SECONDS) -> DecompileStats:
+def decompile_apk(
+    apk_path: Path, 
+    job_dir: Path, 
+    timeout: Optional[int] = None,
+    scan_mode: str = "standard"
+) -> DecompileStats:
     """
     Decompiles an APK using jadx into job_dir/decompiled.
-    Handles timeout, failures, partial decompilations, and fallback for source-bundle APKs.
-    Surfaces decompilation_incomplete and decompilation_warnings in DecompileStats.
+    Applies profile-specific resource scaling:
+    - 'standard': 768 MB JADX JVM heap, 2 worker threads, 90s timeout (lean, optimized memory).
+    - 'deep': 2,304 MB JADX JVM heap (3x resource multiplier), 4 worker threads, 180s timeout,
+             --show-bad-code for comprehensive AST extraction without OutOfMemoryError.
     """
+    mode = (scan_mode or "standard").lower().strip()
+    if timeout is None:
+        effective_timeout = 180 if mode == "deep" else TIMEOUT_SECONDS
+    else:
+        effective_timeout = timeout
+
+    threads = "4" if mode == "deep" else "2"
+    heap_opts = "-Xmx2304m -Xms512m -XX:+UseG1GC" if mode == "deep" else "-Xmx768m -Xms128m -XX:+UseG1GC"
+
     decompiled_dir = job_dir / "decompiled"
     decompiled_dir.mkdir(parents=True, exist_ok=True)
     
@@ -98,20 +114,22 @@ def decompile_apk(apk_path: Path, job_dir: Path, timeout: int = TIMEOUT_SECONDS)
             decompilation_warnings=["jadx binary not found on system PATH or in tools/jadx"]
         )
 
-    # Invoke jadx CLI with memory-capped and I/O-optimized flags
+    # Invoke jadx CLI with memory-capped and I/O-optimized flags based on scan profile
     cmd = [
         jadx_bin,
-        "-j", "2",          # Limit to 2 threads to prevent NVMe/SSD saturation and 100% active disk queue
+        "-j", threads,
         "-d", str(decompiled_dir),
         "--no-res",         # Skip resources to speed up code extraction
         "--no-debug-info",  # Skip debug line/var tables, reducing memory and disk writes by ~40%
-        str(apk_path)
     ]
+    if mode == "deep":
+        cmd.append("--show-bad-code")
+    cmd.append(str(apk_path))
     
-    # Restrict JVM Heap to 768 MB so it never hogs host system memory
+    # Configure JVM Heap per profile (768 MB for standard, 2,304 MB / 3x for deep audit)
     sub_env = os.environ.copy()
-    sub_env["JAVA_OPTS"] = "-Xmx768m -Xms128m -XX:+UseG1GC"
-    sub_env["DEFAULT_JVM_OPTS"] = "-Xmx768m -Xms128m -XX:+UseG1GC"
+    sub_env["JAVA_OPTS"] = heap_opts
+    sub_env["DEFAULT_JVM_OPTS"] = heap_opts
 
     try:
         proc = subprocess.run(
@@ -119,7 +137,7 @@ def decompile_apk(apk_path: Path, job_dir: Path, timeout: int = TIMEOUT_SECONDS)
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
+            timeout=effective_timeout,
             env=sub_env
         )
         elapsed = round(time.time() - start_time, 2)
@@ -187,9 +205,9 @@ def decompile_apk(apk_path: Path, job_dir: Path, timeout: int = TIMEOUT_SECONDS)
             method="jadx",
             file_count=file_count,
             time_taken_seconds=elapsed,
-            error=f"Decompilation timed out after {timeout} seconds.",
+            error=f"Decompilation timed out after {effective_timeout} seconds.",
             decompilation_incomplete=True,
-            decompilation_warnings=[f"Decompilation timed out after {timeout} seconds; partial files may have been recovered."]
+            decompilation_warnings=[f"Decompilation timed out after {effective_timeout} seconds; partial files may have been recovered."]
         )
     except Exception as e:
         elapsed = round(time.time() - start_time, 2)
