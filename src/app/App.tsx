@@ -1889,7 +1889,7 @@ export default function App() {
             </div>
 
             <div className="text-center">
-              <span className="text-xs font-bold tracking-tight" style={{ color: T.text1, fontFamily: ui }}>QuickDroid</span>
+              <span className="text-xs font-bold tracking-tight" style={{ color: T.text1, fontFamily: ui }}>HealDroid</span>
               <span className="text-[10px] ml-1.5 font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: T.surf2, color: T.text3, fontFamily: mono }}>v2.4</span>
             </div>
 

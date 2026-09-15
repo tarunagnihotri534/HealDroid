@@ -19,7 +19,7 @@ from backend.app.rules.rule_runner import run_all_rules
 from backend.app.report import generate_report
 
 app = FastAPI(
-    title="APK Security Analysis Engine",
+    title="HealDroid - APK Security Analysis Engine",
     description="Static analysis engine for Android APKs with manifest parsing, jadx decompilation, and rule-based vulnerability scanning.",
     version="0.3.0"
 )
