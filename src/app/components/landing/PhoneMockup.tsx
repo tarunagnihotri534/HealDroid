@@ -25,7 +25,7 @@ export function PhoneMockup({ children }: PhoneMockupProps) {
       >
         {/* Screen Bezel Inset (Clean Thin Radius) */}
         <div
-          className="relative rounded-[34px] sm:rounded-[40px] overflow-hidden bg-slate-900 h-[500px] sm:h-[540px] md:h-[575px]"
+          className="relative rounded-[34px] sm:rounded-[40px] overflow-hidden bg-slate-900 h-[500px] sm:h-[540px] md:h-[575px] no-scrollbar"
           style={{
             boxShadow: "inset 0 0 0 1.5px rgba(0, 0, 0, 0.85)",
           }}
@@ -47,7 +47,7 @@ export function PhoneMockup({ children }: PhoneMockupProps) {
           />
 
           {/* Phone Screen App Container */}
-          <div className="w-full h-full overflow-hidden flex flex-col">
+          <div className="w-full h-full overflow-hidden flex flex-col no-scrollbar">
             {children}
           </div>
         </div>

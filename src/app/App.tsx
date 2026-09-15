@@ -1896,10 +1896,12 @@ function AuthScreen({ onLogin, embedded = false }: { onLogin: (user: AuthUser) =
   return (
     <div className={`flex justify-center ${embedded ? "w-full h-full" : "min-h-[100dvh]"}`} style={{ backgroundColor: embedded ? T.bg : "#E8EAF0" }}>
       <div
-        className="relative w-full max-w-[430px] flex flex-col justify-between"
+        className="relative w-full max-w-[430px] flex flex-col justify-between no-scrollbar"
         style={{
           height: embedded ? "100%" : "100dvh",
           overflowY: "auto",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
           backgroundColor: T.bg,
           padding: embedded ? "20px 14px 14px 14px" : "env(safe-area-inset-top, 24px) 20px 24px 20px",
         }}
