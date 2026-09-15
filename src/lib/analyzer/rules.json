@@ -1,0 +1,119 @@
+[
+  {
+    "id": "SECRET_AWS_KEY",
+    "pattern": "AKIA[0-9A-Z]{16}",
+    "severity": "critical",
+    "title": "Hardcoded AWS Access Key",
+    "owasp_category": "M9: Reverse Engineering",
+    "evidence_prefix": "Found AWS access key matching pattern: ",
+    "remediation": "Do not hardcode cloud credentials in client binaries. Obtain short-lived STS session tokens dynamically from a trusted backend.\n\nCompliant AWS STS snippet:\nAWSCredentialsProvider provider = new STSAssumeRoleSessionCredentialsProvider.Builder(roleArn, sessionName).build();"
+  },
+  {
+    "id": "SECRET_GENERIC_KEY_TOKEN_PASSWORD",
+    "pattern": "(?i)\\b(?:String|final\\s+String|var|val)?\\s*(?:api_?key|secret|password|auth_?token|access_?token|private_?key|app_?secret)\\s*=\\s*\"([^\\r\\n\"]{4,})\"\\s*;",
+    "severity": "high",
+    "title": "Hardcoded Secret / API Key / Password Literal",
+    "owasp_category": "M9: Reverse Engineering",
+    "evidence_prefix": "Found hardcoded string literal assignment to credential variable: ",
+    "remediation": "Remove plaintext credentials from source code. Use Android KeyStore and EncryptedSharedPreferences.\n\nCompliant EncryptedSharedPreferences snippet:\nMasterKey masterKey = new MasterKey.Builder(context)\n    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)\n    .build();\nSharedPreferences securePrefs = EncryptedSharedPreferences.create(\n    context, \"secure_prefs\", masterKey,\n    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,\n    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM\n);"
+  },
+  {
+    "id": "SECRET_JWT",
+    "pattern": "eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_.-]+",
+    "severity": "high",
+    "title": "Hardcoded JWT (JSON Web Token)",
+    "owasp_category": "M2: Insecure Data Storage",
+    "evidence_prefix": "Found hardcoded JWT token structure: ",
+    "remediation": "Never embed static JWT tokens into APK binaries. Fetch short-lived tokens from an authentication endpoint at runtime and store them in EncryptedSharedPreferences.\n\nCompliant token storage:\nsecurePrefs.edit().putString(\"auth_token\", tokenFromAuthServer).apply();"
+  },
+  {
+    "id": "WEAK_CRYPTO_DES",
+    "pattern": "Cipher\\.getInstance\\s*\\(\\s*[\"'](?:DES|DESede)(?:/[^\"']*)?[\"']\\s*\\)|KeyGenerator\\.getInstance\\s*\\(\\s*[\"'](?:DES|DESede)[\"']\\s*\\)",
+    "severity": "high",
+    "title": "Weak Cryptographic Algorithm: DES/3DES",
+    "owasp_category": "M5: Insufficient Cryptography",
+    "evidence_prefix": "Usage of weak DES/3DES cipher detected: ",
+    "remediation": "Upgrade from DES/3DES to authenticated AES-256 in GCM mode.\n\nCompliant AES-GCM snippet:\nCipher cipher = Cipher.getInstance(\"AES/GCM/NoPadding\");\nGCMParameterSpec gcmSpec = new GCMParameterSpec(128, iv);\ncipher.init(Cipher.ENCRYPT_MODE, secretKey, gcmSpec);"
+  },
+  {
+    "id": "WEAK_CRYPTO_ECB",
+    "pattern": "Cipher\\.getInstance\\s*\\(\\s*[\"'][^\"']+/ECB/[^\"']*[\"']\\s*\\)|Cipher\\.getInstance\\s*\\(\\s*[\"']AES[\"']\\s*\\)",
+    "severity": "high",
+    "title": "Insecure Cipher Mode: ECB",
+    "owasp_category": "M5: Insufficient Cryptography",
+    "evidence_prefix": "Usage of insecure ECB cipher mode detected: ",
+    "remediation": "ECB mode leaks plaintext patterns because identical input blocks produce identical output blocks. Use authenticated AES-GCM instead.\n\nCompliant AES-GCM snippet:\nCipher cipher = Cipher.getInstance(\"AES/GCM/NoPadding\");\ncipher.init(Cipher.ENCRYPT_MODE, secretKey, gcmSpec);"
+  },
+  {
+    "id": "WEAK_CRYPTO_MD5",
+    "pattern": "MessageDigest\\.getInstance\\s*\\(\\s*[\"']MD5[\"']\\s*\\)",
+    "severity": "medium",
+    "title": "Weak Hash Algorithm: MD5",
+    "owasp_category": "M5: Insufficient Cryptography",
+    "evidence_prefix": "Usage of MD5 hashing detected: ",
+    "remediation": "MD5 is susceptible to hash collision attacks. Upgrade to SHA-256 or SHA-512.\n\nCompliant SHA-256 snippet:\nMessageDigest digest = MessageDigest.getInstance(\"SHA-256\");\nbyte[] hash = digest.digest(inputData.getBytes(StandardCharsets.UTF_8));"
+  },
+  {
+    "id": "WEAK_CRYPTO_SHA1",
+    "pattern": "MessageDigest\\.getInstance\\s*\\(\\s*[\"']SHA-?1[\"']\\s*\\)",
+    "severity": "medium",
+    "title": "Weak Hash Algorithm: SHA-1",
+    "owasp_category": "M5: Insufficient Cryptography",
+    "evidence_prefix": "Usage of SHA-1 hashing detected: ",
+    "remediation": "SHA-1 is deprecated and collision-prone. Upgrade to SHA-256.\n\nCompliant SHA-256 snippet:\nMessageDigest digest = MessageDigest.getInstance(\"SHA-256\");\nbyte[] hash = digest.digest(inputData.getBytes(StandardCharsets.UTF_8));"
+  },
+  {
+    "id": "CLEARTEXT_HTTP",
+    "pattern": "(?:\"http://(?!schemas\\.android\\.com|www\\.w3\\.org|schemas\\.xmlsoap\\.org|localhost|127\\.0\\.0\\.1)[^\"\\r\\n]+\"|\\bHttpURLConnection\\b)",
+    "severity": "medium",
+    "title": "Unencrypted HTTP Connection Usage",
+    "owasp_category": "M3: Insecure Communication",
+    "evidence_prefix": "Found cleartext HTTP endpoint or unencrypted connection usage: ",
+    "remediation": "Use HTTPS with TLS 1.3 and HttpsURLConnection for all network communication.\n\nCompliant HTTPS snippet:\nURL url = new URL(\"https://api.example.com/v1/secure-endpoint\");\nHttpsURLConnection conn = (HttpsURLConnection) url.openConnection();"
+  },
+  {
+    "id": "INSECURE_RANDOM",
+    "pattern": "\\bnew\\s+Random\\s*\\(|java\\.util\\.Random",
+    "severity": "medium",
+    "title": "Insecure Pseudo-Random Number Generator",
+    "owasp_category": "M5: Insufficient Cryptography",
+    "evidence_prefix": "Found java.util.Random usage: ",
+    "remediation": "java.util.Random produces deterministic pseudo-random sequences. Use java.security.SecureRandom for security tokens and cryptographic operations.\n\nCompliant SecureRandom snippet:\nSecureRandom secureRandom = new SecureRandom();\nbyte[] tokenBytes = new byte[32];\nsecureRandom.nextBytes(tokenBytes);"
+  },
+  {
+    "id": "INSECURE_TRUST_ALL_CERTS",
+    "pattern": "checkServerTrusted\\s*\\([^)]*\\)\\s*\\{\\s*\\}|ALLOW_ALL_HOSTNAME_VERIFIER|NullHostnameVerifier|TrustAllTrustManager",
+    "severity": "critical",
+    "title": "TLS/SSL Certificate Verification Disabled",
+    "owasp_category": "M3: Insecure Communication",
+    "evidence_prefix": "Found custom TrustManager/HostnameVerifier bypassing SSL certificate validation: ",
+    "remediation": "Never disable SSL/TLS certificate validation. Implement certificate pinning via OkHttp or Network Security Config.\n\nCompliant OkHttp CertificatePinner snippet:\nCertificatePinner certificatePinner = new CertificatePinner.Builder()\n    .add(\"api.example.com\", \"sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\")\n    .build();\nOkHttpClient client = new OkHttpClient.Builder()\n    .certificatePinner(certificatePinner)\n    .build();"
+  },
+  {
+    "id": "WORLD_READABLE_WRITABLE_STORAGE",
+    "pattern": "MODE_WORLD_READABLE|MODE_WORLD_WRITEABLE",
+    "severity": "high",
+    "title": "Insecure World-Readable / World-Writable File Access",
+    "owasp_category": "M2: Insecure Data Storage",
+    "evidence_prefix": "Found usage of deprecated insecure file creation mode: ",
+    "remediation": "MODE_WORLD_READABLE and MODE_WORLD_WRITEABLE allow any application on the device to read/modify app files. Use Context.MODE_PRIVATE or EncryptedFile.\n\nCompliant file creation:\nFileOutputStream fos = context.openFileOutput(\"sensitive_data.txt\", Context.MODE_PRIVATE);"
+  },
+  {
+    "id": "SQL_INJECTION",
+    "pattern": "(?:rawQuery|execSQL)\\s*\\([^;]+\\+|(?i)\"(?:SELECT|INSERT|UPDATE|DELETE)\\s+[^\"]+\"\\s*\\+",
+    "severity": "high",
+    "title": "Potential SQL Injection via Dynamic Query Concatenation",
+    "owasp_category": "M7: Client Code Quality",
+    "evidence_prefix": "Dynamic query concatenation in SQL statement: ",
+    "remediation": "Use parameterized queries with selectionArgs to prevent SQL injection.\n\nCompliant parameterized query snippet:\nCursor cursor = db.rawQuery(\n    \"SELECT * FROM users WHERE username = ? AND status = ?\",\n    new String[]{ username, \"active\" }\n);"
+  },
+  {
+    "id": "SENSITIVE_LOGGING",
+    "pattern": "Log\\.[vdiwe]\\s*\\([^,]+,\\s*[^;]*(?:password|token|secret|pin|ssn|credit|credential|auth_token)[^;]*\\);",
+    "severity": "low",
+    "title": "Sensitive Information Logged to Logcat",
+    "owasp_category": "M2: Insecure Data Storage",
+    "evidence_prefix": "Found log statement potentially printing sensitive data: ",
+    "remediation": "Strip logging statements from production builds using ProGuard/R8 rules.\n\nCompliant proguard-rules.pro:\n-assumenosideeffects class android.util.Log {\n    public static boolean isLoggable(java.lang.String, int);\n    public static int v(...);\n    public static int d(...);\n}"
+  }
+]

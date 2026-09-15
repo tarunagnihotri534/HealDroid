@@ -238,14 +238,29 @@ GET /api/health
 ## 🛠 Getting Started
 
 ### Prerequisites
-- **Python**: 3.10 or higher
-- **Java**: JRE/JDK 11 or higher (required for JADX)
 - **Node.js**: 18.x or higher & `npm`
+- **Java**: JRE/JDK 11 or higher (optional, for full JADX decompilation; automatic bytecode string fallback is included)
 
 ---
 
-### 1. Portable JADX Decompiler Setup
-Download and install the self-contained portable JADX binary into `tools/jadx/` with one command:
+### 1. Unified Fullstack Setup (Next.js)
+
+HealDroid is built with **Next.js App Router**, serving both the frontend UI and backend static analysis APIs simultaneously with zero manual backend startup required:
+
+```powershell
+# 1. Install dependencies
+npm install
+
+# 2. Start the unified development server
+npm run dev
+```
+
+Open **`http://localhost:3000`** in your browser.
+
+---
+
+### 2. Optional: Portable JADX Decompiler Setup
+Download and install the self-contained portable JADX binary into `tools/jadx/` for deep decompilation:
 
 - **Windows (PowerShell)**:
   ```powershell
@@ -259,34 +274,16 @@ Download and install the self-contained portable JADX binary into `tools/jadx/` 
 
 ---
 
-### 2. Backend Engine (FastAPI)
+### 3. Optional: Python FastAPI Backend (Alternative)
+If you wish to run the standalone Python FastAPI backend independently:
 ```powershell
-# Create & activate a virtual environment (optional but recommended)
-python -m venv venv
-.\venv\Scripts\activate   # Linux/macOS: source venv/bin/activate
-
-# Install dependencies
+# Install Python dependencies
 pip install -r backend/requirements.txt
 
-# Start the FastAPI asynchronous server
+# Start FastAPI server
 python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-- **Interactive Swagger Docs**: `http://localhost:8000/docs`
-- **ReDoc Specification**: `http://localhost:8000/redoc`
 
----
-
-### 3. Frontend Dashboard (React + Vite)
-```powershell
-# Install Node dependencies
-npm install
-
-# Start Vite dev server
-npm run dev
-```
-Open **`http://localhost:5173`** in your browser to access the HealDroid interface.
-
----
 
 ### 4. Generate Vulnerable Test APK Fixtures
 HealDroid includes a test generator that compiles realistic synthetic APKs containing all 18+ OWASP vulnerability vectors:
