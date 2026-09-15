@@ -807,6 +807,10 @@ async function getSha256(blob: Blob): Promise<string> {
 
 function getBackendBaseUrls(): string[] {
   const urls: string[] = [];
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl && typeof envUrl === "string" && envUrl.trim()) {
+    urls.push(envUrl.trim().replace(/\/+$/, ""));
+  }
   if (typeof window !== "undefined" && window.location) {
     const host = window.location.hostname;
     if (host && host !== "localhost" && host !== "127.0.0.1") {
@@ -1923,7 +1927,7 @@ export default function App() {
               {backendOnline === true ? (
                 <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: "rgba(16,185,129,0.12)", color: "#059669" }}>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  API :8000
+                  API Online
                 </span>
               ) : backendOnline === false ? (
                 <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: "rgba(239,68,68,0.12)", color: "#DC2626" }}>
