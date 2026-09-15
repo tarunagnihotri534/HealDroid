@@ -228,6 +228,132 @@ def rule_cleartext_traffic(manifest_data: ManifestData) -> List[Finding]:
             
     return findings
 
+def rule_unverified_deep_links(manifest_data: ManifestData) -> List[Finding]:
+    """
+    Evaluates Activity intent filters for browsable deep links:
+    - Unverified HTTP/HTTPS App Links lacking android:autoVerify="true".
+    - Unprotected custom URL schemes vulnerable to link hijacking.
+    """
+    findings: List[Finding] = []
+    
+    for comp in manifest_data.components:
+        if comp.type != "activity":
+            continue
+            
+        is_browsable = any("android.intent.category.BROWSABLE" in c for c in comp.categories)
+        has_view = any("android.intent.action.VIEW" in a for a in comp.intent_filters)
+        
+        if is_browsable or (has_view and (comp.data_schemes or comp.data_hosts)):
+            http_schemes = [s for s in comp.data_schemes if s.lower() in ("http", "https")]
+            custom_schemes = [s for s in comp.data_schemes if s.lower() not in ("http", "https")]
+            
+            # 1. Unverified HTTP/HTTPS Deep Link (App Link hijacking)
+            if http_schemes and not comp.auto_verify:
+                findings.append(Finding(
+                    id="MANIFEST_UNVERIFIED_DEEP_LINK",
+                    severity="high",
+                    title="Unverified Browsable HTTP/HTTPS Deep Link (App Links)",
+                    owasp_category="M1: Improper Platform Usage",
+                    location=comp.name,
+                    evidence=(
+                        f"Activity '{comp.name}' accepts browsable HTTP/HTTPS deep links for scheme(s) {http_schemes} "
+                        "without android:autoVerify=\"true\", allowing malicious apps to intercept deep links."
+                    ),
+                    remediation=(
+                        "Enable App Links verification by adding android:autoVerify=\"true\" and hosting an "
+                        "assetlinks.json file on your verified domain.\n\n"
+                        "Compliant AndroidManifest.xml deep-link snippet:\n"
+                        "<activity android:name=\"" + comp.name + "\"\n"
+                        "    android:exported=\"true\">\n"
+                        "    <intent-filter android:autoVerify=\"true\">\n"
+                        "        <action android:name=\"android.intent.action.VIEW\" />\n"
+                        "        <category android:name=\"android.intent.category.DEFAULT\" />\n"
+                        "        <category android:name=\"android.intent.category.BROWSABLE\" />\n"
+                        "        <data android:scheme=\"https\" android:host=\"yourdomain.com\" />\n"
+                        "    </intent-filter>\n"
+                        "</activity>"
+                    )
+                ))
+                
+            # 2. Custom URL scheme hijacking risk
+            if custom_schemes:
+                findings.append(Finding(
+                    id="MANIFEST_CUSTOM_SCHEME_DEEP_LINK",
+                    severity="medium",
+                    title=f"Custom Scheme Deep Link Registered: {', '.join(custom_schemes)}",
+                    owasp_category="M1: Improper Platform Usage",
+                    location=comp.name,
+                    evidence=(
+                        f"Activity '{comp.name}' registers custom URL scheme(s) {custom_schemes}. "
+                        "Custom schemes cannot be cryptographically verified by Android and can be claimed by rogue apps."
+                    ),
+                    remediation=(
+                        "Migrate from custom URL schemes to verified HTTPS App Links with android:autoVerify=\"true\". "
+                        "If custom schemes must be retained, strictly validate caller identity and sanitize all incoming parameters.\n\n"
+                        "Compliant parameter validation:\n"
+                        "Uri data = getIntent().getData();\n"
+                        "if (data != null && \"expected_host\".equals(data.getHost())) {\n"
+                        "    // Sanitize and validate query parameters before processing\n"
+                        "}"
+                    )
+                ))
+                
+    return findings
+
+def rule_unprotected_broadcast_receivers(manifest_data: ManifestData) -> List[Finding]:
+    """
+    Flags exported Broadcast Receivers without permission protection that listen to
+    system or custom broadcast actions, exposing the app to unauthorized trigger or DoS.
+    """
+    findings: List[Finding] = []
+    for comp in manifest_data.components:
+        if comp.type == "receiver" and comp.exported and not comp.permission:
+            action_desc = f" [{', '.join(comp.intent_filters)}]" if comp.intent_filters else ""
+            findings.append(Finding(
+                id="MANIFEST_UNPROTECTED_BROADCAST_RECEIVER",
+                severity="high",
+                title="Unprotected Exported Broadcast Receiver",
+                owasp_category="M1: Improper Platform Usage",
+                location=comp.name,
+                evidence=f"BroadcastReceiver '{comp.name}' is exported{action_desc} without an enforced permission requirement.",
+                remediation=(
+                    "Set android:exported=\"false\" if the receiver is intended solely for in-app broadcasts. "
+                    "If external broadcast reception is necessary, protect it with a signature-level permission.\n\n"
+                    "Compliant AndroidManifest.xml fix:\n"
+                    f"<receiver android:name=\"{comp.name}\"\n"
+                    "    android:exported=\"false\" />"
+                )
+            ))
+    return findings
+
+def rule_exported_provider_grant_uri(manifest_data: ManifestData) -> List[Finding]:
+    """
+    Flags exported Content Providers that enable grantUriPermissions="true" without permission enforcement.
+    """
+    findings: List[Finding] = []
+    for comp in manifest_data.components:
+        if comp.type == "provider" and comp.exported and comp.grant_uri_permissions and not comp.permission:
+            findings.append(Finding(
+                id="MANIFEST_EXPORTED_PROVIDER_GRANT_URI",
+                severity="high",
+                title="Exported Content Provider with Unrestricted grantUriPermissions",
+                owasp_category="M1: Improper Platform Usage",
+                location=comp.name,
+                evidence=(
+                    f"ContentProvider '{comp.name}' is exported and enables grantUriPermissions=\"true\" "
+                    "without permission protection, allowing URI delegation to unauthorized external applications."
+                ),
+                remediation=(
+                    "Do not export ContentProviders that grant broad URI permissions. Restrict grantUriPermissions "
+                    "to explicit sub-paths using <grant-uri-permission> elements.\n\n"
+                    "Compliant ContentProvider configuration:\n"
+                    f"<provider android:name=\"{comp.name}\"\n"
+                    "    android:exported=\"false\"\n"
+                    "    android:grantUriPermissions=\"false\" />"
+                )
+            ))
+    return findings
+
 def run_all_manifest_rules(manifest_data: Optional[ManifestData]) -> List[Finding]:
     """
     Executes all individual manifest rules against ManifestData.
@@ -242,6 +368,9 @@ def run_all_manifest_rules(manifest_data: Optional[ManifestData]) -> List[Findin
         rule_debuggable,
         rule_allow_backup,
         rule_cleartext_traffic,
+        rule_unverified_deep_links,
+        rule_unprotected_broadcast_receivers,
+        rule_exported_provider_grant_uri,
     ]
     
     for fn in rule_functions:
@@ -251,3 +380,4 @@ def run_all_manifest_rules(manifest_data: Optional[ManifestData]) -> List[Findin
             pass
             
     return findings
+

@@ -76,13 +76,34 @@ def _parse_with_androguard(apk_path: str | Path) -> Optional[ManifestData]:
                     name = _clean_str(elem.get(f"{{{ANDROID_NS}}}name")) or ""
                     exp_val = elem.get(f"{{{ANDROID_NS}}}exported")
                     perm = _clean_str(elem.get(f"{{{ANDROID_NS}}}permission"))
+                    grant_uri_val = elem.get(f"{{{ANDROID_NS}}}grantUriPermissions")
+                    grant_uri = str(grant_uri_val).lower() in ("true", "1") if grant_uri_val is not None else False
                     
                     intent_filters: List[str] = []
+                    categories: List[str] = []
+                    data_schemes: List[str] = []
+                    data_hosts: List[str] = []
+                    auto_verify = False
+
                     for ifilter in elem.findall("intent-filter"):
+                        av_val = ifilter.get(f"{{{ANDROID_NS}}}autoVerify")
+                        if av_val is not None and str(av_val).lower() in ("true", "1"):
+                            auto_verify = True
                         for action in ifilter.findall("action"):
                             a_name = _clean_str(action.get(f"{{{ANDROID_NS}}}name"))
                             if a_name:
                                 intent_filters.append(a_name)
+                        for cat in ifilter.findall("category"):
+                            c_name = _clean_str(cat.get(f"{{{ANDROID_NS}}}name"))
+                            if c_name:
+                                categories.append(c_name)
+                        for data in ifilter.findall("data"):
+                            s_name = _clean_str(data.get(f"{{{ANDROID_NS}}}scheme"))
+                            if s_name:
+                                data_schemes.append(s_name)
+                            h_name = _clean_str(data.get(f"{{{ANDROID_NS}}}host"))
+                            if h_name:
+                                data_hosts.append(h_name)
                                 
                     has_filters = len(intent_filters) > 0 or len(elem.findall("intent-filter")) > 0
                     if exp_val is not None:
@@ -95,7 +116,12 @@ def _parse_with_androguard(apk_path: str | Path) -> Optional[ManifestData]:
                         type=comp_type,
                         exported=exported,
                         permission=perm,
-                        intent_filters=intent_filters
+                        intent_filters=intent_filters,
+                        categories=categories,
+                        data_schemes=data_schemes,
+                        data_hosts=data_hosts,
+                        auto_verify=auto_verify,
+                        grant_uri_permissions=grant_uri
                     ))
 
         return ManifestData(
@@ -169,13 +195,34 @@ def _parse_with_elementtree(xml_bytes: bytes) -> ManifestData:
             for elem in app_elem.findall(tag):
                 name = elem.attrib.get(f"{{{ANDROID_NS}}}name") or ""
                 exported_attr = elem.attrib.get(f"{{{ANDROID_NS}}}exported")
+                grant_uri_attr = elem.attrib.get(f"{{{ANDROID_NS}}}grantUriPermissions")
+                grant_uri = grant_uri_attr.lower() in ("true", "1") if grant_uri_attr is not None else False
                 
                 intent_filters = []
+                categories = []
+                data_schemes = []
+                data_hosts = []
+                auto_verify = False
+
                 for ifilter in elem.findall("intent-filter"):
+                    av_attr = ifilter.attrib.get(f"{{{ANDROID_NS}}}autoVerify")
+                    if av_attr is not None and av_attr.lower() in ("true", "1"):
+                        auto_verify = True
                     for action in ifilter.findall("action"):
                         a_name = action.attrib.get(f"{{{ANDROID_NS}}}name")
                         if a_name:
                             intent_filters.append(a_name)
+                    for cat in ifilter.findall("category"):
+                        c_name = cat.attrib.get(f"{{{ANDROID_NS}}}name")
+                        if c_name:
+                            categories.append(c_name)
+                    for data in ifilter.findall("data"):
+                        s_name = data.attrib.get(f"{{{ANDROID_NS}}}scheme")
+                        if s_name:
+                            data_schemes.append(s_name)
+                        h_name = data.attrib.get(f"{{{ANDROID_NS}}}host")
+                        if h_name:
+                            data_hosts.append(h_name)
                 
                 has_filters = len(intent_filters) > 0 or len(elem.findall("intent-filter")) > 0
                 if exported_attr is not None:
@@ -190,7 +237,12 @@ def _parse_with_elementtree(xml_bytes: bytes) -> ManifestData:
                     type=comp_type,
                     exported=exported,
                     permission=perm,
-                    intent_filters=intent_filters
+                    intent_filters=intent_filters,
+                    categories=categories,
+                    data_schemes=data_schemes,
+                    data_hosts=data_hosts,
+                    auto_verify=auto_verify,
+                    grant_uri_permissions=grant_uri
                 ))
                 
     return ManifestData(

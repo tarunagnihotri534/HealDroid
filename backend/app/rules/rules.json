@@ -115,5 +115,41 @@
     "owasp_category": "M2: Insecure Data Storage",
     "evidence_prefix": "Found log statement potentially printing sensitive data: ",
     "remediation": "Strip logging statements from production builds using ProGuard/R8 rules.\n\nCompliant proguard-rules.pro:\n-assumenosideeffects class android.util.Log {\n    public static boolean isLoggable(java.lang.String, int);\n    public static int v(...);\n    public static int d(...);\n}"
+  },
+  {
+    "id": "SECRET_GOOGLE_API_KEY",
+    "pattern": "AIza[0-9A-Za-z-_]{30,35}",
+    "severity": "high",
+    "title": "Hardcoded Google / Firebase API Key",
+    "owasp_category": "M9: Reverse Engineering",
+    "evidence_prefix": "Found Google / Firebase API key matching standard token pattern: ",
+    "remediation": "Restrict API keys in the Google Cloud Console by package name and SHA-1 signing fingerprint. Never leave Google/Firebase keys with unrestricted API scopes in client code.\n\nCompliant build.gradle / CI injection:\nandroid.defaultConfig {\n    manifestPlaceholders = [GOOGLE_MAPS_KEY: System.getenv(\"GOOGLE_MAPS_KEY\")]\n}"
+  },
+  {
+    "id": "SECRET_PRIVATE_URL_OR_INTERNAL_IP",
+    "pattern": "(?:https?://)?(?:10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|172\\.(?:1[6-9]|2\\d|3[01])\\.\\d{1,3}\\.\\d{1,3})(?::\\d+)?(?:/[^\r\n\"'\\\\\\s]*)?|https?://[a-zA-Z0-9.-]*(?:internal|staging|sandbox|\\.local)[a-zA-Z0-9.-]*(?::\\d+)?(?:/[^\r\n\"'\\\\\\s]*)?",
+    "severity": "medium",
+    "title": "Internal IP Address or Staging/Private URL Exposed",
+    "owasp_category": "M3: Insecure Communication",
+    "evidence_prefix": "Found private RFC1918 internal IP or staging/internal domain: ",
+    "remediation": "Remove hardcoded development, staging, and RFC1918 internal IP endpoints from production builds. Use dynamic environment-based build variants (productFlavors/buildTypes).\n\nCompliant build.gradle flavor configuration:\nbuildTypes {\n    release {\n        buildConfigField \"String\", \"BASE_URL\", '\"https://api.production.domain.com/\"'\n    }\n}"
+  },
+  {
+    "id": "SECRET_CLOUD_STORAGE_BUCKET",
+    "pattern": "https?://[a-zA-Z0-9.-]+\\.s3(?:[.-][a-zA-Z0-9-]+)?\\.amazonaws\\.com/[^\r\n\"'\\\\\\s]*|https?://storage\\.googleapis\\.com/[a-zA-Z0-9._-]+/[^\r\n\"'\\\\\\s]*",
+    "severity": "medium",
+    "title": "Direct Cloud Storage Bucket URL Exposed (AWS S3 / GCS)",
+    "owasp_category": "M2: Insecure Data Storage",
+    "evidence_prefix": "Found direct cloud storage bucket URL: ",
+    "remediation": "Do not embed direct, public cloud bucket URLs in client code. Gate bucket access behind authenticated backend microservices or pre-signed short-lived URLs.\n\nCompliant pre-signed URL generation pattern (backend):\nGeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(bucketName, objectKey)\n    .withMethod(HttpMethod.GET)\n    .withExpiration(expirationDate);"
+  },
+  {
+    "id": "SECRET_SLACK_GITHUB_TOKEN",
+    "pattern": "https?://hooks\\.slack\\.com/services/T[0-9a-zA-Z]+/B[0-9a-zA-Z]+/[0-9a-zA-Z]+|ghp_[0-9a-zA-Z]{36}",
+    "severity": "critical",
+    "title": "Exposed Webhook or Personal Access Token (Slack / GitHub)",
+    "owasp_category": "M9: Reverse Engineering",
+    "evidence_prefix": "Found hardcoded developer access token or incoming webhook: ",
+    "remediation": "Revoke and rotate exposed webhooks and personal access tokens immediately. Never embed developer automation credentials into distributed mobile binaries.\n\nCompliant secret management:\nManage alerting and repository access exclusively via server-side secrets managers (AWS Secrets Manager, HashiCorp Vault)."
   }
 ]

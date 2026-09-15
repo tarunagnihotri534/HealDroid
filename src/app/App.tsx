@@ -111,16 +111,23 @@ export interface JobData {
 const DEFAULT_RULES: RuleItem[] = [
   { id: "MANIFEST_DEBUGGABLE", title: "Debuggable Application Flag", severity: "critical", owasp: "M1", type: "manifest-rule", enabled: true, pattern: 'android:debuggable="true"' },
   { id: "SECRET_AWS_KEY", title: "Hardcoded AWS Access Key", severity: "critical", owasp: "M9", type: "regex-code-rule", enabled: true, pattern: "AKIA[0-9A-Z]{16}" },
+  { id: "SECRET_SLACK_GITHUB_TOKEN", title: "Exposed Webhook or Developer Token", severity: "critical", owasp: "M9", type: "regex-code-rule", enabled: true, pattern: "hooks.slack.com | ghp_[0-9a-zA-Z]{36}" },
   { id: "INSECURE_TRUST_ALL_CERTS", title: "Disabled TLS Certificate Validation", severity: "critical", owasp: "M3", type: "regex-code-rule", enabled: true, pattern: "checkServerTrusted | ALLOW_ALL_HOSTNAME_VERIFIER" },
   { id: "INSECURE_WEBVIEW_JS", title: "Insecure WebView JavaScript Bridge", severity: "critical", owasp: "M1", type: "compound-rule", enabled: true, pattern: "setJavaScriptEnabled(true) + addJavascriptInterface" },
   { id: "MANIFEST_EXPORTED_ACTIVITY", title: "Exported Activity Without Permission", severity: "high", owasp: "M1", type: "manifest-rule", enabled: true, pattern: "exported=true || intent-filter without permission" },
+  { id: "MANIFEST_UNVERIFIED_DEEP_LINK", title: "Unverified Browsable HTTP/HTTPS Deep Link", severity: "high", owasp: "M1", type: "manifest-rule", enabled: true, pattern: "BROWSABLE without android:autoVerify=true" },
+  { id: "MANIFEST_UNPROTECTED_BROADCAST_RECEIVER", title: "Unprotected Exported Broadcast Receiver", severity: "high", owasp: "M1", type: "manifest-rule", enabled: true, pattern: "exported receiver without permission" },
+  { id: "MANIFEST_EXPORTED_PROVIDER_GRANT_URI", title: "Exported Provider with grantUriPermissions", severity: "high", owasp: "M1", type: "manifest-rule", enabled: true, pattern: "provider grantUriPermissions=true without perm" },
   { id: "MANIFEST_CLEARTEXT_TRAFFIC", title: "Cleartext HTTP Traffic Permitted", severity: "high", owasp: "M3", type: "manifest-rule", enabled: true, pattern: "usesCleartextTraffic=true || targetSdk < 28" },
+  { id: "SECRET_GOOGLE_API_KEY", title: "Hardcoded Google / Firebase API Key", severity: "high", owasp: "M9", type: "regex-code-rule", enabled: true, pattern: "AIza[0-9A-Za-z-_]{30,35}" },
   { id: "SECRET_GENERIC_KEY_TOKEN_PASSWORD", title: "Hardcoded Credential / API Key Literal", severity: "high", owasp: "M9", type: "regex-code-rule", enabled: true, pattern: 'String (apiKey|secret|password) = "..."' },
   { id: "SECRET_JWT", title: "Hardcoded JWT Token", severity: "high", owasp: "M2", type: "regex-code-rule", enabled: true, pattern: "eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\..." },
   { id: "WEAK_CRYPTO_DES", title: "Weak Cryptography: DES / 3DES", severity: "high", owasp: "M5", type: "regex-code-rule", enabled: true, pattern: 'Cipher.getInstance("DES")' },
   { id: "WEAK_CRYPTO_ECB", title: "Insecure Cipher Mode: ECB", severity: "high", owasp: "M5", type: "regex-code-rule", enabled: true, pattern: 'Cipher.getInstance(".../ECB/...")' },
   { id: "SQL_INJECTION", title: "Dynamic SQL Query Concatenation", severity: "high", owasp: "M7", type: "regex-code-rule", enabled: true, pattern: 'rawQuery("... " + var)' },
   { id: "WORLD_READABLE_WRITABLE_STORAGE", title: "World-Readable / World-Writable Storage", severity: "high", owasp: "M2", type: "regex-code-rule", enabled: true, pattern: "MODE_WORLD_READABLE | MODE_WORLD_WRITEABLE" },
+  { id: "SECRET_PRIVATE_URL_OR_INTERNAL_IP", title: "Internal IP / Staging Endpoint Exposed", severity: "medium", owasp: "M3", type: "regex-code-rule", enabled: true, pattern: "10.x.x.x | 192.168.x.x | *.internal.corp" },
+  { id: "SECRET_CLOUD_STORAGE_BUCKET", title: "Direct Cloud Storage Bucket URL (S3/GCS)", severity: "medium", owasp: "M2", type: "regex-code-rule", enabled: true, pattern: "s3.amazonaws.com | storage.googleapis.com" },
   { id: "MANIFEST_DANGEROUS_PERMISSION", title: "Dangerous Android Permission Requested", severity: "medium", owasp: "M1", type: "manifest-rule", enabled: true, pattern: "SEND_SMS, READ_CONTACTS, CAMERA, etc." },
   { id: "MANIFEST_ALLOW_BACKUP", title: "Application Backup Enabled (allowBackup=true)", severity: "medium", owasp: "M2", type: "manifest-rule", enabled: true, pattern: 'android:allowBackup="true"' },
   { id: "WEAK_CRYPTO_MD5", title: "Weak Hash Algorithm: MD5", severity: "medium", owasp: "M5", type: "regex-code-rule", enabled: true, pattern: 'MessageDigest.getInstance("MD5")' },
@@ -1363,6 +1370,16 @@ function FindingCard({
 }
 
 function FindingDetail({ finding: f, onClose }: { finding: FindingItem; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(f.remediation);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   return (
     <div className="absolute inset-0 z-50 flex flex-col" style={{ backgroundColor: T.bg }}>
       <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0"
@@ -1395,14 +1412,30 @@ function FindingDetail({ finding: f, onClose }: { finding: FindingItem; onClose:
         </Card>
 
         <Card className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: T.successBg }}>
-              <Shield className="w-3 h-3" style={{ color: T.success }} strokeWidth={2} />
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: T.successBg }}>
+                <Shield className="w-3 h-3" style={{ color: T.success }} strokeWidth={2} />
+              </div>
+              <p className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: T.text4, fontFamily: ui }}>
+                Actionable Developer Fix
+              </p>
             </div>
-            <SectionLabel>Actionable Remediation Guidance</SectionLabel>
+            <button
+              onClick={handleCopy}
+              className="text-[11px] font-semibold px-2.5 py-1 transition-all flex items-center gap-1"
+              style={{
+                borderRadius: 999,
+                backgroundColor: copied ? T.success : T.white,
+                color: copied ? T.white : T.accent,
+                border: `1px solid ${T.accent}`,
+              }}
+            >
+              {copied ? "✓ Copied!" : "Copy Code"}
+            </button>
           </div>
-          <div className="p-4 rounded-xl" style={{ backgroundColor: T.successBg }}>
-            <pre className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: T.text1, fontFamily: ui }}>{f.remediation}</pre>
+          <div className="p-4 rounded-xl overflow-x-auto" style={{ backgroundColor: T.successBg }}>
+            <pre className="text-xs leading-relaxed whitespace-pre-wrap font-mono" style={{ color: T.text1 }}>{f.remediation}</pre>
           </div>
         </Card>
 

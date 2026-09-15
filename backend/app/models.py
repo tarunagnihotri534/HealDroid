@@ -19,6 +19,12 @@ class ManifestComponent(BaseModel):
     exported: bool = False
     permission: Optional[str] = None
     intent_filters: List[str] = Field(default_factory=list)
+    categories: List[str] = Field(default_factory=list)
+    data_schemes: List[str] = Field(default_factory=list)
+    data_hosts: List[str] = Field(default_factory=list)
+    auto_verify: bool = False
+    grant_uri_permissions: bool = False
+
 
 class ManifestData(BaseModel):
     package_name: str = ""

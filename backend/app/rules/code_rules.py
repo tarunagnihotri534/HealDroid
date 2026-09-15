@@ -85,8 +85,13 @@ def run_code_rules(
 
         # 2. Compound Rule: INSECURE_WEBVIEW_JS
         # Flag if file contains setJavaScriptEnabled(true) AND (addJavascriptInterface OR insecure file/universal access)
-        has_js_enabled = bool(re.search(r"setJavaScriptEnabled\s*\(\s*true\s*\)", content, re.IGNORECASE))
-        has_js_interface_or_file_access = bool(re.search(r"(?:addJavascriptInterface\s*\(|setAllowUniversalAccessFromFileURLs\s*\(\s*true\s*\)|setAllowFileAccessFromFileURLs\s*\(\s*true\s*\))", content, re.IGNORECASE))
+        # Matches both Java source and Smali bytecode invocations
+        has_js_enabled = bool(re.search(r"(?:setJavaScriptEnabled\s*\(\s*true\s*\)|->setJavaScriptEnabled\s*\(Z\)V)", content, re.IGNORECASE))
+        has_js_interface_or_file_access = bool(re.search(
+            r"(?:addJavascriptInterface\s*\(|->addJavascriptInterface|setAllowUniversalAccessFromFileURLs|setAllowFileAccessFromFileURLs)", 
+            content, 
+            re.IGNORECASE
+        ))
         if has_js_enabled and has_js_interface_or_file_access:
             dedup_key = ("INSECURE_WEBVIEW_JS", rel_path)
             if dedup_key not in seen_keys:
@@ -97,7 +102,7 @@ def run_code_rules(
                     title="Insecure WebView with JavaScript Interface / File Access Enabled",
                     owasp_category="M1: Improper Platform Usage",
                     location=rel_path,
-                    evidence="WebView enables JavaScript (setJavaScriptEnabled(true)) and registers a native bridge or enables universal file URLs, creating potential RCE or cross-origin data exfiltration.",
+                    evidence="WebView enables JavaScript (setJavaScriptEnabled) and registers a native bridge or enables universal file URLs, creating potential RCE or cross-origin data exfiltration.",
                     remediation=(
                         "Avoid exposing Java objects to JavaScript via addJavascriptInterface. If required, target API level 17+ and annotate methods with @JavascriptInterface while disabling file access.\n\n"
                         "Compliant WebView configuration:\n"
@@ -114,9 +119,9 @@ def run_code_rules(
                 ))
 
         # 3. Compound Rule: UNENCRYPTED_SQLITE
-        # Flag if file uses SQLite (SQLiteDatabase / SQLiteOpenHelper) without SQLCipher
-        uses_sqlite = bool(re.search(r"\b(?:SQLiteDatabase|SQLiteOpenHelper|openOrCreateDatabase)\b", content))
-        uses_sqlcipher = bool(re.search(r"\b(?:SQLCipher|net\.sqlcipher)\b", content, re.IGNORECASE))
+        # Flag if file uses SQLite (SQLiteDatabase / SQLiteOpenHelper) without SQLCipher (Java & Smali support)
+        uses_sqlite = bool(re.search(r"\b(?:SQLiteDatabase|SQLiteOpenHelper|openOrCreateDatabase|Landroid/database/sqlite/SQLite(?:Database|OpenHelper))\b", content))
+        uses_sqlcipher = bool(re.search(r"\b(?:SQLCipher|net\.sqlcipher|net/sqlcipher)\b", content, re.IGNORECASE))
         if uses_sqlite and not uses_sqlcipher:
             dedup_key = ("UNENCRYPTED_SQLITE", rel_path)
             if dedup_key not in seen_keys:
@@ -127,7 +132,7 @@ def run_code_rules(
                     title="Unencrypted SQLite Database Usage",
                     owasp_category="M2: Insecure Data Storage",
                     location=rel_path,
-                    evidence=f"Class uses standard Android SQLite ({rel_path}) without database-level encryption (SQLCipher).",
+                    evidence=f"Component uses standard unencrypted Android SQLite ({rel_path}) without database-level encryption (SQLCipher).",
                     remediation=(
                         "Encrypt sensitive databases at rest using SQLCipher for Android or Room with SQLCipher driver.\n\n"
                         "Compliant SQLCipher initialization:\n"
