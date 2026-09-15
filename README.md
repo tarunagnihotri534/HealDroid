@@ -2,9 +2,9 @@
   <img src="public/icon.svg" width="110" height="110" alt="HealDroid Logo" />
 </p>
 
-<h1 align="center">HealDroid</h1>
+<h1 align="center">HealDroid — Enterprise-Grade Static APK Security Analyzer</h1>
 <p align="center">
-  <strong>Enterprise-Grade Static APK Security Testing (SAST) Platform</strong><br>
+  <strong>Enterprise-Grade Static APK Security Analyzer</strong><br>
   <em>Secure by design. Resilient by nature.</em>
 </p>
 
