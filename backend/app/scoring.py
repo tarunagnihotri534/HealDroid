@@ -1,31 +1,33 @@
 from typing import List, Dict, Any, Literal
+from collections import defaultdict
 from backend.app.models import Finding, ReportSummary
 
-from collections import defaultdict
-
-SEVERITY_WEIGHTS = {
-    "critical": 15,
-    "high": 10,
-    "medium": 5,
-    "low": 2,
-    "info": 0
+# Base severity weights for initial occurrence of a finding
+SEVERITY_WEIGHTS: Dict[str, float] = {
+    "critical": 15.0,
+    "high": 10.0,
+    "medium": 5.0,
+    "low": 2.0,
+    "info": 0.0
 }
 
-MANIFEST_RULE_CAPS = {
-    "critical": 25,
-    "high": 15,
-    "medium": 10,
-    "low": 5,
-    "info": 0
+# Per-rule maximum deduction ceilings for manifest rules
+MANIFEST_RULE_CAPS: Dict[str, float] = {
+    "critical": 25.0,
+    "high": 15.0,
+    "medium": 10.0,
+    "low": 5.0,
+    "info": 0.0
 }
 
-CATEGORY_CAPS = {
-    "permissions": 10,       # Max 10 pts deduction for dangerous permissions
-    "attack_surface": 25,    # Max 25 pts deduction for exported components (activities, services, receivers, providers)
-    "deep_links": 10,        # Max 10 pts deduction for deep link configurations
+# Category deduction ceilings for manifest attack surface domains
+CATEGORY_CAPS: Dict[str, float] = {
+    "permissions": 10.0,       # Max 10 pts deduction for dangerous permissions
+    "attack_surface": 25.0,    # Max 25 pts deduction for exported components (activities, services, receivers, providers, grant_uri)
+    "deep_links": 10.0,        # Max 10 pts deduction for deep link configurations
 }
 
-SEVERITY_ORDER = {
+SEVERITY_ORDER: Dict[str, int] = {
     "critical": 0,
     "high": 1,
     "medium": 2,
@@ -36,19 +38,12 @@ SEVERITY_ORDER = {
 def compute_score(findings: List[Finding]) -> int:
     """
     Computes overall security score starting at 100 using an industry-standard
-    weighted risk model.
-    
-    - Code vulnerabilities (secrets, weak crypto, SQLi, etc.) and critical flaws (debuggable, cleartext traffic)
-      apply full direct deductions based on severity:
-        Critical: 15 pts
-        High: 10 pts
-        Medium: 5 pts
-        Low: 2 pts
-    
-    - Manifest attack-surface & permission configurations apply diminishing marginal deductions and category caps:
-        Permissions: capped at 10 pts max total deduction
-        Attack Surface (Exported components): capped at 25 pts max total deduction
-        Deep Links: capped at 10 pts max total deduction
+    weighted risk model with diminishing marginal returns and category ceilings:
+
+    - Manifest attack-surface, exported components, and permissions apply diminishing
+      marginal deductions and domain category caps (e.g. max 25 pts for exported surface).
+    - Critical manifest security flags (debuggable, cleartext traffic) and code vulnerabilities
+      apply direct deductions with asymptotic scaling for repeated rule occurrences.
     """
     if not findings:
         return 100
@@ -62,14 +57,13 @@ def compute_score(findings: List[Finding]) -> int:
 
     for rid, flist in rule_groups.items():
         sev = flist[0].severity.lower()
-        base = SEVERITY_WEIGHTS.get(sev, 2)
+        base = SEVERITY_WEIGHTS.get(sev, 2.0)
         count = len(flist)
 
         # Manifest surface rules apply diminishing returns and category caps
         if rid.startswith("MANIFEST_") and rid not in (
             "MANIFEST_DEBUGGABLE",
             "MANIFEST_CLEARTEXT_TRAFFIC",
-            "MANIFEST_EXPORTED_PROVIDER_GRANT_URI"
         ):
             if count == 1:
                 rule_ded = float(base)
@@ -80,7 +74,7 @@ def compute_score(findings: List[Finding]) -> int:
             else:
                 rule_ded = base + 0.6 * base + (count - 3) * 0.1 * base
 
-            rule_ded = min(rule_ded, float(MANIFEST_RULE_CAPS.get(sev, 15)))
+            rule_ded = min(rule_ded, float(MANIFEST_RULE_CAPS.get(sev, 15.0)))
 
             if "DANGEROUS_PERMISSION" in rid:
                 cat = "permissions"
@@ -99,10 +93,20 @@ def compute_score(findings: List[Finding]) -> int:
             else:
                 total_deduction += rule_ded
         else:
-            # Code vulnerabilities & critical security flaws: full linear deduction
-            total_deduction += base * count
+            # Code vulnerabilities & critical platform security flags:
+            # Apply diminishing marginal returns for repeated instances of the same rule
+            if count == 1:
+                rule_ded = float(base)
+            elif count == 2:
+                rule_ded = base + 0.4 * base
+            elif count == 3:
+                rule_ded = base + 0.6 * base
+            else:
+                rule_ded = base + 0.6 * base + (count - 3) * 0.2 * base
 
-    return max(0, min(100, int(round(100 - total_deduction))))
+            total_deduction += rule_ded
+
+    return max(0, min(100, int(round(100.0 - total_deduction))))
 
 def score_to_grade(score: int) -> Literal["A", "B", "C", "D", "F"]:
     """

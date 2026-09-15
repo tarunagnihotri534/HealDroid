@@ -805,21 +805,51 @@ async function getSha256(blob: Blob): Promise<string> {
   }
 }
 
+function getBackendBaseUrls(): string[] {
+  const urls: string[] = [];
+  if (typeof window !== "undefined" && window.location) {
+    const host = window.location.hostname;
+    if (host && host !== "localhost" && host !== "127.0.0.1") {
+      urls.push(`http://${host}:8000`);
+    }
+  }
+  urls.push("http://127.0.0.1:8000");
+  urls.push("http://localhost:8000");
+  return Array.from(new Set(urls));
+}
+
 async function apiFetch(endpoint: string, options?: RequestInit): Promise<Response> {
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+
+  // 1. Try relative endpoint first (works via Vite proxy)
   try {
     const res = await fetch(cleanEndpoint, options);
-    if (res.status > 0 && res.status < 500) {
+    // If the frontend static server returned 404 or 405 (Method Not Allowed), it didn't proxy the API request
+    if (res.status !== 404 && res.status !== 405 && res.status < 500) {
       return res;
     }
-    if (res.ok) return res;
   } catch (_) {
-    // Relative proxy path failed (e.g. dev server proxy socket error)
+    // Relative request failed (network error, socket closed, etc.)
   }
 
-  // Fallback directly to FastAPI backend on 127.0.0.1:8000
-  const directUrl = `http://127.0.0.1:8000${cleanEndpoint}`;
-  return await fetch(directUrl, options);
+  // 2. Direct fallback to FastAPI backend on port 8000 (LAN IP or 127.0.0.1)
+  const candidateUrls = getBackendBaseUrls();
+  let lastError: any = null;
+
+  for (const base of candidateUrls) {
+    try {
+      const directUrl = `${base}${cleanEndpoint}`;
+      const directRes = await fetch(directUrl, options);
+      if (directRes.status !== 405) {
+        return directRes;
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (lastError) throw lastError;
+  throw new Error("Unable to connect to HealDroid backend on port 8000");
 }
 
 function ProcessingScreen({
@@ -1822,7 +1852,15 @@ export default function App() {
     async function checkHealth() {
       try {
         const res = await apiFetch("/api/health");
-        if (active) setBackendOnline(res.ok);
+        if (res.ok) {
+          const contentType = res.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const data = await res.json();
+            if (active) setBackendOnline(data.status === "ok");
+            return;
+          }
+        }
+        if (active) setBackendOnline(false);
       } catch (_) {
         if (active) setBackendOnline(false);
       }
