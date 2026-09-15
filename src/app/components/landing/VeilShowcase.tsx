@@ -113,8 +113,8 @@ export function HealDroidShowcase({ onOpenApp }: HealDroidShowcaseProps) {
       </div>
 
       {/* ── TOP SLIDE SWITCHER CONTROLS (4 SHORT TABS) ── */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-md p-1.5 rounded-full border border-stone-200/80 shadow-xs">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mb-6 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+        <div className="flex items-center gap-1 sm:gap-1.5 bg-white/90 backdrop-blur-md p-1 sm:p-1.5 rounded-full border border-stone-200/80 shadow-xs overflow-x-auto no-scrollbar max-w-full">
           {slides.map((s, idx) => {
             const Icon = s.tagIcon;
             const isActive = activeSlide === idx;
@@ -123,7 +123,7 @@ export function HealDroidShowcase({ onOpenApp }: HealDroidShowcaseProps) {
                 key={s.id}
                 type="button"
                 onClick={() => setActiveSlide(idx as 0 | 1 | 2 | 3)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-semibold transition-all cursor-pointer shrink-0 ${
                   isActive
                     ? "bg-[#111827] text-white shadow-md shadow-gray-950/10 scale-100"
                     : "text-stone-600 hover:text-stone-900 hover:bg-stone-100/70"
@@ -143,7 +143,7 @@ export function HealDroidShowcase({ onOpenApp }: HealDroidShowcaseProps) {
             type="button"
             onClick={() => setActiveSlide((prev) => (prev === 0 ? 3 : (prev - 1) as 0 | 1 | 2 | 3))}
             aria-label="Previous slide"
-            className="w-9 h-9 rounded-full bg-white border border-stone-200/80 flex items-center justify-center text-stone-700 hover:bg-stone-50 shadow-xs transition-all cursor-pointer hover:scale-105 active:scale-95"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white border border-stone-200/80 flex items-center justify-center text-stone-700 hover:bg-stone-50 shadow-xs transition-all cursor-pointer hover:scale-105 active:scale-95"
           >
             <ChevronLeft size={16} />
           </button>
@@ -154,7 +154,7 @@ export function HealDroidShowcase({ onOpenApp }: HealDroidShowcaseProps) {
             type="button"
             onClick={() => setActiveSlide((prev) => (prev === 3 ? 0 : (prev + 1) as 0 | 1 | 2 | 3))}
             aria-label="Next slide"
-            className="w-9 h-9 rounded-full bg-white border border-stone-200/80 flex items-center justify-center text-stone-700 hover:bg-stone-50 shadow-xs transition-all cursor-pointer hover:scale-105 active:scale-95"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white border border-stone-200/80 flex items-center justify-center text-stone-700 hover:bg-stone-50 shadow-xs transition-all cursor-pointer hover:scale-105 active:scale-95"
           >
             <ChevronRight size={16} />
           </button>
@@ -164,7 +164,7 @@ export function HealDroidShowcase({ onOpenApp }: HealDroidShowcaseProps) {
       {/* ── MAIN CARD CONTAINER ── */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div
-          className="relative rounded-[32px] md:rounded-[40px] p-6 sm:p-10 md:p-14 overflow-hidden border border-[#ECE7DF] transition-all duration-500"
+          className="relative rounded-[28px] sm:rounded-[36px] md:rounded-[40px] p-5 sm:p-8 md:p-14 overflow-hidden border border-[#ECE7DF] transition-all duration-500"
           style={{
             background: "linear-gradient(180deg, #FCFBF9 0%, #F8F6F2 100%)",
             boxShadow: "0 25px 50px -12px rgba(28, 25, 23, 0.05), 0 0 1px 1px rgba(28, 25, 23, 0.03)",
@@ -184,9 +184,9 @@ export function HealDroidShowcase({ onOpenApp }: HealDroidShowcaseProps) {
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center relative z-10">
             {/* ── LEFT COLUMN: FEATURE DETAILS ── */}
-            <div className="lg:col-span-6 space-y-6">
+            <div className="lg:col-span-6 space-y-5 sm:space-y-6">
               {/* Slide Number & Tag */}
               <div className="flex items-center gap-3">
                 <span
@@ -205,20 +205,20 @@ export function HealDroidShowcase({ onOpenApp }: HealDroidShowcaseProps) {
               </div>
 
               {/* Bold Title */}
-              <h3 className="text-3xl sm:text-4xl lg:text-[42px] font-bold tracking-[-0.03em] text-[#1A1A1A] leading-[1.14]">
+              <h3 className="text-2xl sm:text-3xl lg:text-[42px] font-bold tracking-[-0.03em] text-[#1A1A1A] leading-[1.15]">
                 {currentSlide.title}
               </h3>
 
               {/* Description */}
-              <p className="text-base sm:text-lg text-stone-500 max-w-lg leading-relaxed font-normal">
+              <p className="text-sm sm:text-base lg:text-lg text-stone-500 max-w-lg leading-relaxed font-normal">
                 {currentSlide.description}
               </p>
 
               {/* Bullet Features with Circular Outline Checkmark */}
-              <div className="space-y-3 pt-2">
+              <div className="space-y-2.5 sm:space-y-3 pt-1 sm:pt-2">
                 {currentSlide.features.map((feat) => (
-                  <div key={feat} className="flex items-center gap-3 text-sm text-stone-700 font-medium">
-                    <div className="w-4 h-4 rounded-full border border-stone-300 flex items-center justify-center text-stone-400 text-[10px]">
+                  <div key={feat} className="flex items-center gap-3 text-xs sm:text-sm text-stone-700 font-medium">
+                    <div className="w-4 h-4 rounded-full border border-stone-300 flex items-center justify-center text-stone-400 text-[10px] shrink-0">
                       ✓
                     </div>
                     <span>{feat}</span>
@@ -228,10 +228,10 @@ export function HealDroidShowcase({ onOpenApp }: HealDroidShowcaseProps) {
             </div>
 
             {/* ── RIGHT COLUMN: PHONE MOCKUP WITH ZERO SCROLLBAR ── */}
-            <div className="lg:col-span-6 flex items-center justify-center relative min-h-[640px]">
+            <div className="lg:col-span-6 flex items-center justify-center relative min-h-0 sm:min-h-[600px] w-full">
               {/* ── PHONE HARDWARE FRAME (CLEAN TITANIUM IPHONE BEZEL) ── */}
               <div
-                className="relative rounded-[52px] p-[6px] transition-all duration-300 w-full max-w-[360px] shadow-2xl"
+                className="relative rounded-[44px] sm:rounded-[52px] p-[5px] sm:p-[6px] transition-all duration-300 w-full max-w-[320px] sm:max-w-[360px] shadow-2xl"
                 style={{
                   background: "linear-gradient(145deg, #2D3139 0%, #1A1D24 50%, #0F1115 100%)",
                   boxShadow:
@@ -240,15 +240,14 @@ export function HealDroidShowcase({ onOpenApp }: HealDroidShowcaseProps) {
               >
                 {/* Inner Screen Bezel (Clean Thin Radius) */}
                 <div
-                  className="relative rounded-[46px] overflow-hidden bg-[#FAF9F6] text-stone-900 flex flex-col"
+                  className="relative rounded-[38px] sm:rounded-[46px] overflow-hidden bg-[#FAF9F6] text-stone-900 flex flex-col h-[580px] sm:h-[640px]"
                   style={{
-                    height: "640px",
                     boxShadow: "inset 0 0 0 1.5px rgba(0, 0, 0, 0.85)",
                   }}
                 >
                   {/* Dynamic Island Notch */}
-                  <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between px-3 h-5 w-24 bg-black rounded-full shadow-md">
-                    <div className="w-2 h-2 rounded-full bg-[#1e293b]" />
+                  <div className="absolute top-2 sm:top-2.5 left-1/2 -translate-x-1/2 z-50 flex items-center justify-between px-2.5 sm:px-3 h-4 sm:h-5 w-20 sm:w-24 bg-black rounded-full shadow-md">
+                    <div className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-[#1e293b]" />
                     <div className="w-1.5 h-1.5 rounded-full bg-teal-400/80 animate-pulse" />
                   </div>
 

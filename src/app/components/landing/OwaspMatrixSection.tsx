@@ -253,7 +253,7 @@ public class AuthManager {
           </p>
 
           {/* Filter Pills */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-7">
+          <div className="flex items-center gap-1.5 sm:gap-2 mt-6 overflow-x-auto no-scrollbar max-w-full justify-start sm:justify-center px-1 py-1">
             {[
               { key: "all", label: "All Vectors (6)" },
               { key: "m1", label: "M1: Platform" },
@@ -270,7 +270,7 @@ public class AuthManager {
                   setActiveFilter(f.key);
                   if (f.key !== "all") setSelectedRule(f.key.toUpperCase());
                 }}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                className={`px-3 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer shrink-0 ${
                   activeFilter === f.key
                     ? "bg-[#111827] text-white shadow-sm"
                     : "bg-white text-stone-600 border border-stone-200 hover:border-stone-300 hover:text-stone-900"
@@ -347,7 +347,7 @@ public class AuthManager {
                   </p>
 
                   <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between text-[10px] font-mono text-stone-400">
-                    <span className="truncate max-w-[220px]">Target: {rule.target}</span>
+                    <span className="truncate max-w-[200px] sm:max-w-[220px]">Target: {rule.target}</span>
                     <span className="text-teal-600 font-semibold">{isSelected ? "● Inspected" : "Inspect →"}</span>
                   </div>
                 </div>
@@ -356,70 +356,70 @@ public class AuthManager {
           </div>
 
           {/* Right Column: Live Cybersecurity AST Inspector Terminal */}
-          <div className="lg:col-span-7 sticky top-24">
-            <div className="rounded-3xl bg-[#0F141C] text-stone-100 border border-slate-800 shadow-2xl overflow-hidden">
+          <div className="lg:col-span-7 lg:sticky lg:top-24">
+            <div className="rounded-2xl sm:rounded-3xl bg-[#0F141C] text-stone-100 border border-slate-800 shadow-2xl overflow-hidden">
               {/* Terminal Window Header */}
-              <div className="bg-[#181E29] px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+              <div className="bg-[#181E29] px-3.5 sm:px-4 py-2.5 sm:py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-rose-500/80" />
-                    <div className="w-3 h-3 rounded-full bg-amber-500/80" />
-                    <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
+                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-rose-500/80" />
+                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-amber-500/80" />
+                    <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-emerald-500/80" />
                   </div>
-                  <span className="text-[11px] font-mono text-slate-400 ml-2">
+                  <span className="text-[10px] sm:text-[11px] font-mono text-slate-400 ml-1 sm:ml-2 truncate max-w-[200px] sm:max-w-none">
                     healdroid_ast_inspector :: {activeRuleData.code.toLowerCase()}_detector.ts
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono bg-teal-950 text-teal-300 px-2 py-0.5 rounded border border-teal-800">
+                  <span className="text-[9px] sm:text-[10px] font-mono bg-teal-950 text-teal-300 px-2 py-0.5 rounded border border-teal-800">
                     ENGINE: {activeRuleData.engine}
                   </span>
                 </div>
               </div>
 
               {/* Terminal Telemetry Body */}
-              <div className="p-5 sm:p-6 space-y-5">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
                 {/* Meta Overview */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-[#141923] border border-slate-800/80 text-xs font-mono">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 p-2.5 sm:p-3 rounded-xl bg-[#141923] border border-slate-800/80 text-xs font-mono">
                   <div>
-                    <span className="text-[10px] text-slate-500 block">OWASP CATEGORY</span>
-                    <span className="text-teal-400 font-bold">{activeRuleData.code}: {activeRuleData.category}</span>
+                    <span className="text-[9px] sm:text-[10px] text-slate-500 block">OWASP CATEGORY</span>
+                    <span className="text-teal-400 font-bold text-[11px] sm:text-xs">{activeRuleData.code}: {activeRuleData.category}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 block">CWE WEAKNESS</span>
-                    <span className="text-slate-200 font-bold">{activeRuleData.cwe}</span>
+                    <span className="text-[9px] sm:text-[10px] text-slate-500 block">CWE WEAKNESS</span>
+                    <span className="text-slate-200 font-bold text-[11px] sm:text-xs">{activeRuleData.cwe}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 block">SEVERITY IMPACT</span>
-                    <span className="text-rose-400 font-bold">{activeRuleData.severity.toUpperCase()} ({activeRuleData.cvss})</span>
+                    <span className="text-[9px] sm:text-[10px] text-slate-500 block">SEVERITY IMPACT</span>
+                    <span className="text-rose-400 font-bold text-[11px] sm:text-xs">{activeRuleData.severity.toUpperCase()} ({activeRuleData.cvss})</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 block">MATCH LATENCY</span>
-                    <span className="text-emerald-400 font-bold">~0.42 ms</span>
+                    <span className="text-[9px] sm:text-[10px] text-slate-500 block">MATCH LATENCY</span>
+                    <span className="text-emerald-400 font-bold text-[11px] sm:text-xs">~0.42 ms</span>
                   </div>
                 </div>
 
                 {/* Pattern Signature */}
                 <div className="space-y-1.5 font-mono text-xs">
-                  <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                  <div className="flex items-center justify-between text-slate-400 text-[10px] sm:text-[11px]">
                     <span className="flex items-center gap-1.5">
                       <Terminal size={12} className="text-teal-400" />
                       <span>AST SEARCH PATTERN & SIGNATURE</span>
                     </span>
-                    <span className="text-[10px] text-slate-500">TARGET: {activeRuleData.target}</span>
+                    <span className="text-[9px] sm:text-[10px] text-slate-500">TARGET: {activeRuleData.target}</span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-[#0B0E14] border border-slate-800 text-teal-300 text-[11px] overflow-x-auto">
+                  <div className="p-2 sm:p-2.5 rounded-lg bg-[#0B0E14] border border-slate-800 text-teal-300 text-[10px] sm:text-[11px] overflow-x-auto">
                     <code>{activeRuleData.pattern}</code>
                   </div>
                 </div>
 
                 {/* Vulnerable Code Finding */}
                 <div className="space-y-1.5 font-mono">
-                  <div className="flex items-center justify-between text-[11px]">
+                  <div className="flex items-center justify-between text-[10px] sm:text-[11px]">
                     <span className="text-rose-400 font-bold flex items-center gap-1.5">
                       <AlertTriangle size={12} />
-                      <span>DETECTED VULNERABILITY (SAMPLE AST DECOMPILED)</span>
+                      <span>DETECTED VULNERABILITY (SAMPLE AST)</span>
                     </span>
                     <button
                       type="button"
@@ -430,17 +430,17 @@ public class AuthManager {
                       <span>{copiedCode === "vuln" ? "Copied" : "Copy"}</span>
                     </button>
                   </div>
-                  <pre className="p-3 rounded-xl bg-[#090C10] border border-rose-950/60 text-slate-200 text-[11px] overflow-x-auto leading-relaxed">
+                  <pre className="p-2.5 sm:p-3 rounded-xl bg-[#090C10] border border-rose-950/60 text-slate-200 text-[10px] sm:text-[11px] overflow-x-auto leading-relaxed">
                     <code>{activeRuleData.vulnerableSnippet}</code>
                   </pre>
                 </div>
 
                 {/* Verified Fix Guidance */}
                 <div className="space-y-1.5 font-mono">
-                  <div className="flex items-center justify-between text-[11px]">
+                  <div className="flex items-center justify-between text-[10px] sm:text-[11px]">
                     <span className="text-emerald-400 font-bold flex items-center gap-1.5">
                       <CheckCircle2 size={12} />
-                      <span>ACTIONABLE REMEDIATION CODE PATCH</span>
+                      <span>ACTIONABLE REMEDIATION PATCH</span>
                     </span>
                     <button
                       type="button"
@@ -451,7 +451,7 @@ public class AuthManager {
                       <span>{copiedCode === "fix" ? "Copied" : "Copy Patch"}</span>
                     </button>
                   </div>
-                  <pre className="p-3 rounded-xl bg-[#090C10] border border-teal-950/60 text-slate-200 text-[11px] overflow-x-auto leading-relaxed">
+                  <pre className="p-2.5 sm:p-3 rounded-xl bg-[#090C10] border border-teal-950/60 text-slate-200 text-[10px] sm:text-[11px] overflow-x-auto leading-relaxed">
                     <code>{activeRuleData.compliantSnippet}</code>
                   </pre>
                 </div>

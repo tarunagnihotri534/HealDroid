@@ -16,6 +16,8 @@ import {
   Smartphone,
   Bell,
   ExternalLink,
+  Menu,
+  X,
 } from "lucide-react";
 import { PhoneMockup } from "./PhoneMockup";
 import { HealDroidShowcase } from "./VeilShowcase";
@@ -30,6 +32,7 @@ interface LandingPageProps {
 export function LandingPage({ onOpenApp, renderAppContent }: LandingPageProps) {
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleDownloadApk = () => {
     setDownloading(true);
@@ -41,8 +44,6 @@ export function LandingPage({ onOpenApp, renderAppContent }: LandingPageProps) {
     document.body.removeChild(link);
     setTimeout(() => setDownloading(false), 2000);
   };
-
-
 
   const faqs = [
     {
@@ -65,8 +66,8 @@ export function LandingPage({ onOpenApp, renderAppContent }: LandingPageProps) {
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1A1A1A] font-sans selection:bg-teal-100 selection:text-teal-900">
-      {/* ── TOP NAVBAR (EXACT VEIL MINIMAL STYLE) ── */}
-      <header className="sticky top-0 z-50 bg-[#FAF8F5]/90 backdrop-blur-md border-b border-stone-200/60">
+      {/* ── TOP NAVBAR ── */}
+      <header className="sticky top-0 z-50 bg-[#FAF8F5]/95 backdrop-blur-md border-b border-stone-200/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo */}
           <div
@@ -79,7 +80,7 @@ export function LandingPage({ onOpenApp, renderAppContent }: LandingPageProps) {
             </div>
           </div>
 
-          {/* Navigation Links: Features, OWASP Matrix, Contact, Download APK, FAQs */}
+          {/* Navigation Links (Desktop) */}
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-stone-600">
             <a href="#features" className="hover:text-stone-900 transition-colors">
               Features
@@ -103,7 +104,7 @@ export function LandingPage({ onOpenApp, renderAppContent }: LandingPageProps) {
           </nav>
 
           {/* Right Action CTA */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               type="button"
               onClick={handleDownloadApk}
@@ -116,13 +117,68 @@ export function LandingPage({ onOpenApp, renderAppContent }: LandingPageProps) {
             <button
               type="button"
               onClick={onOpenApp}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold rounded-full bg-[#111827] text-white hover:bg-black shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold rounded-full bg-[#111827] text-white hover:bg-black shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
             >
               <span>Launch Scanner</span>
               <span className="text-xs">↗</span>
             </button>
+
+            {/* Mobile Hamburger Button */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-xl text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
+              aria-label="Toggle Menu"
+            >
+              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Menu Dropdown */}
+        {mobileMenuOpen && (
+          <div className="md:hidden bg-[#FAF8F5] border-b border-stone-200 px-4 pt-2 pb-6 space-y-3 shadow-lg">
+            <a
+              href="#features"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-3 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-100 rounded-lg"
+            >
+              Features
+            </a>
+            <a
+              href="#owasp"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-3 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-100 rounded-lg"
+            >
+              OWASP Matrix
+            </a>
+            <a
+              href="/contact"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-3 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-100 rounded-lg"
+            >
+              Contact
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                handleDownloadApk();
+              }}
+              className="w-full text-left px-3 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-100 rounded-lg flex items-center gap-2"
+            >
+              <Download size={14} className="text-teal-600" />
+              <span>Download Android APK</span>
+            </button>
+            <a
+              href="#faq"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-3 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-100 rounded-lg"
+            >
+              FAQs
+            </a>
+          </div>
+        )}
       </header>
 
       {/* ── HERO SECTION (EXACT SCREENSHOT 1 VEIL ALIGNMENT & STORYTELLING) ── */}
