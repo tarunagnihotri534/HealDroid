@@ -223,7 +223,7 @@ public class AuthManager {
   };
 
   return (
-    <section id="owasp" className="py-20 md:py-28 bg-[#FAF8F5] relative overflow-hidden border-t border-stone-200/60">
+    <section id="owasp" className="py-20 md:py-28 bg-[#FAF8F5] relative border-t border-stone-200/60">
       {/* Background Cyber Grid Lines */}
       <div className="absolute inset-0 bg-subtle-grid pointer-events-none opacity-40" />
 
@@ -355,8 +355,8 @@ public class AuthManager {
             })}
           </div>
 
-          {/* Right Column: Live Cybersecurity AST Inspector Terminal */}
-          <div className="lg:col-span-7 lg:sticky lg:top-24">
+          {/* Right Column: Live Cybersecurity AST Inspector Terminal (Follows Scroll from M1 to M9) */}
+          <div className="lg:col-span-7 lg:sticky lg:top-20 self-start z-30">
             <div className="rounded-2xl sm:rounded-3xl bg-[#0F141C] text-stone-100 border border-slate-800 shadow-2xl overflow-hidden">
               {/* Terminal Window Header */}
               <div className="bg-[#181E29] px-3.5 sm:px-4 py-2.5 sm:py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
