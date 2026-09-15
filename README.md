@@ -1,13 +1,22 @@
-# 🛡️ HealDroid — Enterprise-Grade Static APK Security Analyzer
+<p align="center">
+  <img src="public/icon.svg" width="110" height="110" alt="HealDroid Logo" />
+</p>
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18.3-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-6.0-646CFF.svg?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![OWASP](https://img.shields.io/badge/OWASP-Mobile%20Top%2010-orange.svg)](https://owasp.org/www-project-mobile-top-10/)
-[![Tests](https://img.shields.io/badge/Tests-28%20Passing-brightgreen.svg)]()
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+<h1 align="center">HealDroid</h1>
+<p align="center">
+  <strong>Enterprise-Grade Static APK Security Testing (SAST) Platform</strong><br>
+  <em>Secure by design. Resilient by nature.</em>
+</p>
+
+<p align="center">
+  <a href="https://heal-droid.onrender.com"><img src="https://img.shields.io/badge/Render-Live%20Platform-00D2B4?style=flat-square&logo=render&logoColor=white" alt="Render Live" /></a>
+  <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-14.2-black?style=flat-square&logo=next.js" alt="Next.js" /></a>
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.5-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://owasp.org/www-project-mobile-top-10/"><img src="https://img.shields.io/badge/OWASP-Mobile%20Top%2010-orange?style=flat-square" alt="OWASP" /></a>
+  <a href="HealDroid-v1.0.apk"><img src="https://img.shields.io/badge/Download-Android%20APK-teal?style=flat-square&logo=android&logoColor=white" alt="Download APK" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" /></a>
+</p>
 
 **HealDroid** is an advanced static application security testing (SAST) platform engineered specifically for Android APKs. It combines binary manifest parsing, high-throughput JADX decompilation, a declarative multi-pattern AST & compound rule engine, weighted OWASP risk scoring, and instant developer remediation snippets within a responsive mobile-first dashboard.
 
