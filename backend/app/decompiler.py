@@ -35,10 +35,15 @@ def find_jadx_binary() -> Optional[str]:
     return None
 
 def count_java_files(directory: Path) -> int:
-    """Counts total .java files in directory tree."""
+    """Counts total .java files in directory tree quickly using os.walk."""
     if not directory.exists():
         return 0
-    return sum(1 for _ in directory.rglob("*.java"))
+    count = 0
+    for _, _, files in os.walk(str(directory)):
+        for f in files:
+            if f.endswith(".java") or f.endswith(".smali"):
+                count += 1
+    return count
 
 def _extract_raw_java_source(apk_path: Path, output_dir: Path) -> int:
     """
@@ -93,21 +98,29 @@ def decompile_apk(apk_path: Path, job_dir: Path, timeout: int = TIMEOUT_SECONDS)
             decompilation_warnings=["jadx binary not found on system PATH or in tools/jadx"]
         )
 
-    # Invoke jadx CLI
+    # Invoke jadx CLI with memory-capped and I/O-optimized flags
     cmd = [
         jadx_bin,
+        "-j", "2",          # Limit to 2 threads to prevent NVMe/SSD saturation and 100% active disk queue
         "-d", str(decompiled_dir),
-        "--no-res",  # skip resources to speed up code extraction
+        "--no-res",         # Skip resources to speed up code extraction
+        "--no-debug-info",  # Skip debug line/var tables, reducing memory and disk writes by ~40%
         str(apk_path)
     ]
     
+    # Restrict JVM Heap to 768 MB so it never hogs host system memory
+    sub_env = os.environ.copy()
+    sub_env["JAVA_OPTS"] = "-Xmx768m -Xms128m -XX:+UseG1GC"
+    sub_env["DEFAULT_JVM_OPTS"] = "-Xmx768m -Xms128m -XX:+UseG1GC"
+
     try:
         proc = subprocess.run(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            env=sub_env
         )
         elapsed = round(time.time() - start_time, 2)
         file_count = count_java_files(decompiled_dir)

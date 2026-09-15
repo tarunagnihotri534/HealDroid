@@ -1,7 +1,7 @@
 from typing import List, Optional, Literal, Dict, Any
 from pydantic import BaseModel, Field
 
-SeverityLevel = Literal["critical", "high", "medium", "low"]
+SeverityLevel = Literal["critical", "high", "medium", "low", "info"]
 ComponentType = Literal["activity", "service", "receiver", "provider"]
 
 class Finding(BaseModel):
@@ -39,8 +39,8 @@ class ManifestData(BaseModel):
     uses_cleartext_traffic: bool = False
 
 class DecompileStats(BaseModel):
-    status: Literal["pending", "decompiling", "complete", "failed"] = "pending"
-    method: Literal["jadx", "raw_source", "none"] = "none"
+    status: Literal["pending", "decompiling", "complete", "failed", "skipped"] = "pending"
+    method: Literal["jadx", "raw_source", "none", "skipped"] = "none"
     file_count: int = 0
     time_taken_seconds: float = 0.0
     error: Optional[str] = None
@@ -52,6 +52,7 @@ class ReportSummary(BaseModel):
     high: int = 0
     medium: int = 0
     low: int = 0
+    info: int = 0
 
 class Report(BaseModel):
     app_name: str
@@ -76,3 +77,6 @@ class JobResponse(BaseModel):
     manifest: Optional[ManifestData] = None
     decompilation: Optional[DecompileStats] = None
     error: Optional[str] = None
+    current_stage: Optional[str] = "ingestion"
+    stage_message: Optional[str] = None
+    scan_mode: Literal["lightning", "standard", "deep"] = "standard"

@@ -1,16 +1,33 @@
-﻿import os
+import os
 import uuid
+import shutil
 import zipfile
 from pathlib import Path
 from fastapi import HTTPException, UploadFile
 
 STORAGE_DIR = Path("storage") / "jobs"
 
+def cleanup_old_jobs(max_retained: int = 3):
+    """
+    Prunes older job directories to keep disk space lean and avoid file watcher bloat.
+    """
+    if not STORAGE_DIR.exists():
+        return
+    try:
+        job_dirs = [d for d in STORAGE_DIR.iterdir() if d.is_dir()]
+        if len(job_dirs) > max_retained:
+            job_dirs.sort(key=lambda d: d.stat().st_mtime, reverse=True)
+            for old_dir in job_dirs[max_retained:]:
+                shutil.rmtree(old_dir, ignore_errors=True)
+    except Exception:
+        pass
+
 def create_job(upload_file: UploadFile) -> tuple[str, Path, Path]:
     """
     Accepts an uploaded file, verifies it is a valid zip/apk,
     saves it to storage/jobs/{job_id}/app.apk, and returns (job_id, apk_path, job_dir).
     """
+    cleanup_old_jobs(max_retained=3)
     job_id = str(uuid.uuid4())[:8]
     job_dir = STORAGE_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)

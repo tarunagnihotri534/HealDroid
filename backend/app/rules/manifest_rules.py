@@ -36,6 +36,26 @@ DANGEROUS_PERMISSIONS = {
     "android.permission.WRITE_SETTINGS",
 }
 
+PROTECTED_SYSTEM_BROADCASTS = {
+    "android.intent.action.BOOT_COMPLETED",
+    "android.intent.action.LOCKED_BOOT_COMPLETED",
+    "android.intent.action.MY_PACKAGE_REPLACED",
+    "android.intent.action.PACKAGE_ADDED",
+    "android.intent.action.PACKAGE_REMOVED",
+    "android.intent.action.PACKAGE_REPLACED",
+    "android.intent.action.PACKAGE_FULLY_REMOVED",
+    "android.intent.action.PACKAGE_CHANGED",
+    "android.intent.action.PACKAGE_RESTARTED",
+    "android.intent.action.PACKAGE_DATA_CLEARED",
+    "android.intent.action.PACKAGE_FIRST_LAUNCH",
+    "android.intent.action.EXTERNAL_APPLICATIONS_AVAILABLE",
+    "android.intent.action.EXTERNAL_APPLICATIONS_UNAVAILABLE",
+    "android.appwidget.action.APPWIDGET_UPDATE",
+    "android.appwidget.action.APPWIDGET_DELETED",
+    "android.appwidget.action.APPWIDGET_DISABLED",
+    "android.appwidget.action.APPWIDGET_ENABLED",
+}
+
 def rule_exported_components(manifest_data: ManifestData) -> List[Finding]:
     """
     Identifies components (Activity, Service, Receiver, Provider) that are exported
@@ -54,23 +74,56 @@ def rule_exported_components(manifest_data: ManifestData) -> List[Finding]:
 
     for comp in manifest_data.components:
         if comp.exported and not comp.permission:
+            # Launcher activity is required by Android OS to be exported so the launcher can start the application.
             is_launcher = (
                 comp.type == "activity" 
                 and any("android.intent.action.MAIN" in f for f in comp.intent_filters)
-                and len(comp.intent_filters) == 1
+                and any("android.intent.category.LAUNCHER" in c for c in comp.categories)
             )
+            if is_launcher:
+                continue
+
+            # Receivers listening exclusively to protected system broadcasts cannot be invoked by 3rd-party apps
+            if comp.type == "receiver" and comp.intent_filters:
+                if set(comp.intent_filters).issubset(PROTECTED_SYSTEM_BROADCASTS):
+                    continue
+
             rule_id = type_id_map.get(comp.type, "MANIFEST_EXPORTED_COMPONENT")
-            severity = "high" if comp.type in ("provider", "service") else "medium" if is_launcher else "high"
+            
+            # Activities with intent-filters are intentional entry points (deep links, share targets) -> info (0 score penalty).
+            # Activities explicitly exported WITHOUT intent-filters expose internal screens -> medium vulnerability.
+            # Services and providers are high severity (direct IPC / database access).
+            if comp.type == "activity":
+                if comp.intent_filters:
+                    severity = "info"
+                    title = "Exported Activity (Attack Surface Entry Point)"
+                else:
+                    severity = "medium"
+                    title = "Exported Activity Without Intent Filter"
+            elif comp.type in ("provider", "service"):
+                severity = "high"
+                title = f"Exported {comp.type.capitalize()} Without Permission Enforcement"
+            else:
+                severity = "medium"
+                title = f"Exported {comp.type.capitalize()} Without Permission Enforcement"
             
             filter_desc = f" with intent-filters [{', '.join(comp.intent_filters)}]" if comp.intent_filters else ""
-            findings.append(Finding(
-                id=rule_id,
-                severity=severity,
-                title=f"Exported {comp.type.capitalize()} Without Permission Enforcement",
-                owasp_category="M1: Improper Platform Usage",
-                location=comp.name,
-                evidence=f"Component '{comp.name}' ({comp.type}) is exported{filter_desc} without requiring an android:permission.",
-                remediation=(
+            if comp.type == "activity" and comp.intent_filters:
+                evidence = f"Activity '{comp.name}' is exported{filter_desc} as an external entry point. Cataloged under attack surface inventory (no score deduction)."
+                remediation = (
+                    "Ensure input validation and sanitization on all incoming Intent extras to prevent Intent Redirection vulnerabilities:\n\n"
+                    "Compliant Intent parameter validation:\n"
+                    "Intent intent = getIntent();\n"
+                    "if (intent != null && intent.getData() != null) {\n"
+                    "    Uri uri = intent.getData();\n"
+                    "    if (\"expected_host\".equals(uri.getHost())) {\n"
+                    "        // Safely process validated parameters\n"
+                    "    }\n"
+                    "}"
+                )
+            else:
+                evidence = f"Component '{comp.name}' ({comp.type}) is exported{filter_desc} without requiring an android:permission."
+                remediation = (
                     "Set android:exported=\"false\" if this component is internal to the application.\n\n"
                     "Compliant AndroidManifest.xml fix:\n"
                     f"<{comp.type} android:name=\"{comp.name}\"\n"
@@ -81,6 +134,15 @@ def rule_exported_components(manifest_data: ManifestData) -> List[Finding]:
                     "    android:permission=\"com.example.CUSTOM_PERMISSION\"\n"
                     "    android:exported=\"true\" />"
                 )
+
+            findings.append(Finding(
+                id=rule_id,
+                severity=severity,
+                title=title,
+                owasp_category="M1: Improper Platform Usage",
+                location=comp.name,
+                evidence=evidence,
+                remediation=remediation
             ))
             
     return findings
@@ -303,15 +365,20 @@ def rule_unverified_deep_links(manifest_data: ManifestData) -> List[Finding]:
 def rule_unprotected_broadcast_receivers(manifest_data: ManifestData) -> List[Finding]:
     """
     Flags exported Broadcast Receivers without permission protection that listen to
-    system or custom broadcast actions, exposing the app to unauthorized trigger or DoS.
+    custom or sensitive broadcast actions, exposing the app to unauthorized trigger or DoS.
+    Excludes receivers that listen strictly to system-protected actions.
     """
     findings: List[Finding] = []
     for comp in manifest_data.components:
         if comp.type == "receiver" and comp.exported and not comp.permission:
+            # Skip if only listening to OS-protected broadcasts (cannot be sent by 3rd-party apps)
+            if comp.intent_filters and set(comp.intent_filters).issubset(PROTECTED_SYSTEM_BROADCASTS):
+                continue
+
             action_desc = f" [{', '.join(comp.intent_filters)}]" if comp.intent_filters else ""
             findings.append(Finding(
                 id="MANIFEST_UNPROTECTED_BROADCAST_RECEIVER",
-                severity="high",
+                severity="medium",
                 title="Unprotected Exported Broadcast Receiver",
                 owasp_category="M1: Improper Platform Usage",
                 location=comp.name,

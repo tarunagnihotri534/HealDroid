@@ -30,6 +30,15 @@ export default defineConfig({
 
   assetsInclude: ['**/*.svg', '**/*.csv'],
   server: {
+    watch: {
+      ignored: [
+        '**/storage/**',
+        '**/tools/**',
+        '**/backend/**',
+        '**/.pytest_cache/**',
+        '**/tmp_test_*/**',
+      ],
+    },
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',

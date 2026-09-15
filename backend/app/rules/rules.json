@@ -127,7 +127,7 @@
   },
   {
     "id": "SECRET_PRIVATE_URL_OR_INTERNAL_IP",
-    "pattern": "(?:https?://)?(?:10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|172\\.(?:1[6-9]|2\\d|3[01])\\.\\d{1,3}\\.\\d{1,3})(?::\\d+)?(?:/[^\r\n\"'\\\\\\s]*)?|https?://[a-zA-Z0-9.-]*(?:internal|staging|sandbox|\\.local)[a-zA-Z0-9.-]*(?::\\d+)?(?:/[^\r\n\"'\\\\\\s]*)?",
+    "pattern": "(?:https?://)?(?:10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|172\\.(?:1[6-9]|2\\d|3[01])\\.\\d{1,3}\\.\\d{1,3})(?::\\d+)?(?:/[^\\s\"'<>`]+)?|https?://[a-zA-Z0-9_.-]*?(?:internal|staging|sandbox|\\.local)[a-zA-Z0-9_.-]*(?::\\d+)?(?:/[^\\s\"'<>`]+)?",
     "severity": "medium",
     "title": "Internal IP Address or Staging/Private URL Exposed",
     "owasp_category": "M3: Insecure Communication",
