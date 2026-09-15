@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "HealDroid",
+    "slug": "healdroid",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F2F4F8"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.healdroid.security"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F2F4F8"
+      },
+      "package": "com.healdroid.security"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

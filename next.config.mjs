@@ -4,6 +4,13 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['adm-zip'],
   },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      'react-native$': 'react-native-web',
+    };
+    return config;
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },
