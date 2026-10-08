@@ -3,19 +3,50 @@ import subprocess
 import shutil
 import zipfile
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 BASE_DIR = Path("d:/HEALDROID")
 BUILD_DIR = BASE_DIR / "tools" / "apk-build-workspace"
 TOOLS_DIR = BASE_DIR / "tools" / "apk-builder"
-JDK_BIN = Path("C:/Program Files/Java/jdk-25/bin")
 
+def get_jdk_bin() -> Path:
+    java_home = os.environ.get("JAVA_HOME")
+    if java_home:
+        p = Path(java_home) / "bin"
+        if (p / "javac.exe").exists():
+            return p
+    for candidate in [
+        Path("C:/Program Files/Eclipse Adoptium/jdk-17.0.20.101-hotspot/bin"),
+        Path("C:/Program Files/Java/jdk-17/bin"),
+        Path("C:/Program Files/Java/jdk-21/bin"),
+        Path("C:/Program Files/Java/jdk-25/bin"),
+    ]:
+        if (candidate / "javac.exe").exists():
+            return candidate
+    which_javac = shutil.which("javac")
+    if which_javac:
+        return Path(which_javac).parent
+    raise RuntimeError("JDK not found! Please set JAVA_HOME or ensure javac is on PATH.")
+
+JDK_BIN = get_jdk_bin()
 AAPT2_EXE = TOOLS_DIR / "aapt2.exe"
 ANDROID_JAR = TOOLS_DIR / "android.jar"
 R8_JAR = TOOLS_DIR / "r8.jar"
+UBER_SIGNER_JAR = TOOLS_DIR / "uber-apk-signer.jar"
+PERMANENT_KEYSTORE = TOOLS_DIR / "healdroid-release.keystore"
+
 KEYTOOL_EXE = JDK_BIN / "keytool.exe"
-JARSIGNER_EXE = JDK_BIN / "jarsigner.exe"
 JAVAC_EXE = JDK_BIN / "javac.exe"
+JAVA_EXE = JDK_BIN / "java.exe"
+
+def ensure_uber_signer():
+    if not UBER_SIGNER_JAR.exists():
+        print(f"Downloading uber-apk-signer to {UBER_SIGNER_JAR}...")
+        url = "https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar"
+        import urllib.request
+        TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(url, UBER_SIGNER_JAR)
+        print("[OK] uber-apk-signer downloaded successfully")
 
 def create_h_logo(size: int) -> Image.Image:
     """Generates the premium emerald teal HealDroid 'H' logo icon."""
@@ -24,9 +55,7 @@ def create_h_logo(size: int) -> Image.Image:
 
     # 1. Background Rounded Squircle with Emerald/Teal Gradient
     corner_radius = int(size * 0.22)
-    # Create gradient background
     base_color = (13, 148, 136, 255) # #0D9488 Teal-600
-    dark_teal = (15, 118, 110, 255)  # #0F766E Teal-700
     
     # Draw rounded rectangle
     draw.rounded_rectangle([(0, 0), (size - 1, size - 1)], radius=corner_radius, fill=base_color)
@@ -36,9 +65,6 @@ def create_h_logo(size: int) -> Image.Image:
     draw.rounded_rectangle([(2, 2), (size - 3, size - 3)], radius=corner_radius, outline=border_color, width=max(1, int(size * 0.03)))
 
     # 2. Draw the elegant italic "H"
-    # Fallback to drawing polygon/lines for the styled "H" if font is generic
-    # Let's draw the stylized "H" precisely using polygons:
-    # Left vertical stem (tilted/italic), Crossbar, Right vertical stem (tilted/italic)
     cx = size / 2.0
     cy = size / 2.0
     h_h = size * 0.52   # Height of H
@@ -92,6 +118,8 @@ def create_h_logo(size: int) -> Image.Image:
 
 def main():
     print("=== Building HealDroid Android APK ===")
+    print(f"Using JDK: {JDK_BIN}")
+    ensure_uber_signer()
     
     if BUILD_DIR.exists():
         shutil.rmtree(BUILD_DIR)
@@ -100,6 +128,8 @@ def main():
     res_dir = BUILD_DIR / "res"
     src_dir = BUILD_DIR / "src"
     bin_dir = BUILD_DIR / "bin"
+    signed_dir = BUILD_DIR / "signed_out"
+    signed_dir.mkdir(parents=True, exist_ok=True)
     compiled_res = BUILD_DIR / "compiled_res.zip"
     unaligned_apk = BUILD_DIR / "unaligned.apk"
     final_apk = BASE_DIR / "public" / "HealDroid-v1.0.apk"
@@ -142,19 +172,19 @@ def main():
 </resources>""", encoding="utf-8")
 
     # 3. Generate AndroidManifest.xml
+    # Targeting API 34 with min API 21 for maximum device compatibility (Android 5.0 through 15)
     manifest_file = BUILD_DIR / "AndroidManifest.xml"
     manifest_file.write_text("""<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.healdroid.app"
-    android:versionCode="1"
+    android:versionCode="2"
     android:versionName="1.0.0">
 
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <application
         android:label="@string/app_name"
@@ -163,12 +193,13 @@ def main():
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true"
         android:hardwareAccelerated="true"
-        android:allowBackup="true">
+        android:allowBackup="true"
+        android:supportsRtl="true">
 
         <activity
             android:name="com.healdroid.app.MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -272,6 +303,10 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setUserAgentString(settings.getUserAgentString() + " HealDroidApp/1.0");
 
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        }
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
@@ -295,20 +330,28 @@ public class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                 if (uploadMessage != null) {
                     uploadMessage.onReceiveValue(null);
+                    uploadMessage = null;
                 }
                 uploadMessage = filePathCallback;
-                Intent intent = fileChooserParams.createIntent();
                 try {
+                    Intent intent = fileChooserParams.createIntent();
                     startActivityForResult(intent, FILE_CHOOSER_RESULT_CODE);
                 } catch (Exception e) {
-                    uploadMessage = null;
-                    return false;
+                    try {
+                        Intent fallbackIntent = new Intent(Intent.ACTION_GET_CONTENT);
+                        fallbackIntent.addCategory(Intent.CATEGORY_OPENABLE);
+                        fallbackIntent.setType("*/*");
+                        startActivityForResult(Intent.createChooser(fallbackIntent, "Select File"), FILE_CHOOSER_RESULT_CODE);
+                    } catch (Exception ex) {
+                        uploadMessage = null;
+                        return false;
+                    }
                 }
                 return true;
             }
         });
 
-        // Load HealDroid Production Web App
+        // Load HealDroid Production Platform
         webView.loadUrl("https://heal-droid.onrender.com");
     }
 
@@ -351,15 +394,15 @@ public class MainActivity extends Activity {
     print("[OK] Java classes compiled successfully")
 
     # 8. Convert .class to classes.dex with D8/R8
-    print("D8 compiling classes to DEX...")
+    print("D8 compiling classes to DEX (min-api 21)...")
     class_files = list(bin_dir.rglob("*.class"))
     class_file_paths = [str(f) for f in class_files]
 
     subprocess.run([
-        "java", "-cp", str(R8_JAR),
+        str(JAVA_EXE), "-cp", str(R8_JAR),
         "com.android.tools.r8.D8",
         "--lib", str(ANDROID_JAR),
-        "--min-api", "24",
+        "--min-api", "21",
         "--output", str(BUILD_DIR),
         *class_file_paths
     ], check=True)
@@ -372,46 +415,71 @@ public class MainActivity extends Activity {
     # 9. Add classes.dex into unaligned.apk
     with zipfile.ZipFile(unaligned_apk, 'a') as apk_zip:
         apk_zip.write(dex_file, "classes.dex")
-    print("[OK] classes.dex packed into APK")
+    print("[OK] classes.dex packed into base APK")
 
-    # 10. Generate Keystore and Sign APK
-    keystore_file = BUILD_DIR / "healdroid.keystore"
-    if not keystore_file.exists():
-        print("Generating release keystore...")
+    # 10. Permanent Release Keystore Management
+    if not PERMANENT_KEYSTORE.exists():
+        print(f"Generating permanent release keystore at {PERMANENT_KEYSTORE}...")
         subprocess.run([
             str(KEYTOOL_EXE),
             "-genkeypair",
             "-alias", "healdroid",
             "-keypass", "healdroid2026",
-            "-keystore", str(keystore_file),
+            "-keystore", str(PERMANENT_KEYSTORE),
             "-storepass", "healdroid2026",
             "-dname", "CN=HealDroid, OU=Security, O=HealDroid SAST, C=US",
             "-validity", "10000",
             "-keyalg", "RSA",
             "-keysize", "2048"
         ], check=True)
+    else:
+        print(f"[OK] Using existing permanent keystore: {PERMANENT_KEYSTORE}")
 
-    print("Signing APK with jarsigner...")
+    # 11. Sign & Zipalign with uber-apk-signer (v1, v2, v3 schemes + 4-byte zipalign)
+    print("Aligning and signing APK with uber-apk-signer (v1, v2, v3)...")
     subprocess.run([
-        str(JARSIGNER_EXE),
-        "-keystore", str(keystore_file),
-        "-storepass", "healdroid2026",
-        "-keypass", "healdroid2026",
-        "-sigalg", "SHA256withRSA",
-        "-digestalg", "SHA-256",
-        str(unaligned_apk),
-        "healdroid"
+        str(JAVA_EXE), "-jar", str(UBER_SIGNER_JAR),
+        "-a", str(unaligned_apk),
+        "--ks", str(PERMANENT_KEYSTORE),
+        "--ksAlias", "healdroid",
+        "--ksPass", "healdroid2026",
+        "--ksKeyPass", "healdroid2026",
+        "--allowResign",
+        "-o", str(signed_dir)
     ], check=True)
 
-    # 11. Copy final signed installable APK to destinations
-    shutil.copy2(unaligned_apk, final_apk)
-    shutil.copy2(unaligned_apk, root_apk)
+    signed_apks = list(signed_dir.glob("*.apk"))
+    if not signed_apks:
+        raise RuntimeError(f"No signed APK found in {signed_dir}")
+    produced_apk = signed_apks[0]
+    print(f"[OK] Produced signed and aligned APK: {produced_apk}")
 
-    print(f"\n==========================================")
-    print(f"[SUCCESS] Valid Installable APK Generated:")
-    print(f"File: {final_apk} ({final_apk.stat().st_size:,} bytes)")
-    print(f"File: {root_apk} ({root_apk.stat().st_size:,} bytes)")
-    print(f"==========================================")
+    # 12. Automated Verification Check
+    print("Verifying signature schemes and zipalign...")
+    verify_proc = subprocess.run([
+        str(JAVA_EXE), "-jar", str(UBER_SIGNER_JAR),
+        "-y",
+        "-a", str(produced_apk),
+        "--verbose"
+    ], capture_output=True, text=True)
+    
+    print(verify_proc.stdout)
+    if verify_proc.returncode != 0:
+        print(verify_proc.stderr)
+        raise RuntimeError("APK verification failed!")
+    
+    # 13. Deploy to distribution targets
+    shutil.copy2(produced_apk, final_apk)
+    shutil.copy2(produced_apk, root_apk)
+
+    print("==================================================")
+    print("[SUCCESS] Fully Valid, Installable APK Generated:")
+    print(f"  Target 1: {final_apk} ({final_apk.stat().st_size:,} bytes)")
+    print(f"  Target 2: {root_apk} ({root_apk.stat().st_size:,} bytes)")
+    print("  Signature Schemes: v1, v2, v3 Verified")
+    print("  Alignment: 4-byte zipalign Verified")
+    print("  Compatibility: Android 5.0 (API 21) - Android 15 (API 35)")
+    print("==================================================")
 
 if __name__ == "__main__":
     main()

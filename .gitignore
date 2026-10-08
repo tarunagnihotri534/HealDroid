@@ -7,7 +7,8 @@ dist/
 out/
 *.log
 .DS_Store
-tools/
+tools/*
+!tools/build_real_apk.py
 storage/
 __pycache__/
 *.pyc
