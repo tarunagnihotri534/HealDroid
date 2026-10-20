@@ -2,6 +2,10 @@ import os
 import sys
 import zipfile
 import xml.etree.ElementTree as ET
+try:
+    import defusedxml.ElementTree as SafeET
+except ImportError:
+    SafeET = ET
 from pathlib import Path
 from typing import Optional, List
 
@@ -141,7 +145,7 @@ def _parse_with_androguard(apk_path: str | Path) -> Optional[ManifestData]:
         return None
 
 def _parse_with_elementtree(xml_bytes: bytes) -> ManifestData:
-    root = ET.fromstring(xml_bytes)
+    root = SafeET.fromstring(xml_bytes)
     pkg = root.attrib.get("package", "")
     
     uses_sdk = root.find("uses-sdk")
