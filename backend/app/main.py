@@ -24,17 +24,37 @@ app = FastAPI(
     version="0.3.0"
 )
 
-# Enable CORS for frontend development
+# Secure CORS configuration
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+if allowed_origins_env:
+    allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+else:
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://heal-droid.onrender.com",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# In-memory job state (resets on server restart — acceptable for hackathon scope)
+# In-memory job state with bounded retention
+MAX_STORED_JOBS = 200
 JOBS: Dict[str, JobResponse] = {}
+
+def _prune_jobs_memory():
+    """Limits in-memory cache to prevent memory exhaustion (DoS)."""
+    if len(JOBS) > MAX_STORED_JOBS:
+        keys_to_remove = list(JOBS.keys())[:len(JOBS) - MAX_STORED_JOBS]
+        for k in keys_to_remove:
+            JOBS.pop(k, None)
 
 def process_apk_job(job_id: str, apk_path: Path, job_dir: Path, original_filename: str, scan_mode: str = "standard"):
     """
@@ -199,6 +219,7 @@ def upload_apk(
         stage_message=f"Starting {mode} security scan...",
         scan_mode=mode
     )
+    _prune_jobs_memory()
     JOBS[job_id] = initial_job
 
     # Launch processing pipeline asynchronously in background with scan profile

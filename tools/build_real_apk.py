@@ -191,9 +191,9 @@ def main():
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/AppTheme"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         android:hardwareAccelerated="true"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:supportsRtl="true">
 
         <activity
@@ -295,8 +295,8 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setBuiltInZoomControls(false);
@@ -304,13 +304,23 @@ public class MainActivity extends Activity {
         settings.setUserAgentString(settings.getUserAgentString() + " HealDroidApp/1.0");
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         }
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                view.loadUrl(url);
+                if (url == null) return false;
+                Uri uri = Uri.parse(url);
+                String host = uri.getHost();
+                if ("https".equalsIgnoreCase(uri.getScheme()) && host != null && (host.equals("heal-droid.onrender.com") || host.endsWith(".onrender.com"))) {
+                    view.loadUrl(url);
+                    return true;
+                }
+                try {
+                    Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                    startActivity(intent);
+                } catch (Exception ignored) {}
                 return true;
             }
         });
@@ -418,15 +428,19 @@ public class MainActivity extends Activity {
     print("[OK] classes.dex packed into base APK")
 
     # 10. Permanent Release Keystore Management
+    ks_password = os.environ.get("ANDROID_KEYSTORE_PASSWORD", "healdroid2026")
+    if not os.environ.get("ANDROID_KEYSTORE_PASSWORD"):
+        print("[SECURITY NOTICE] Using default development keystore password. Set ANDROID_KEYSTORE_PASSWORD in production CI/CD.")
+
     if not PERMANENT_KEYSTORE.exists():
         print(f"Generating permanent release keystore at {PERMANENT_KEYSTORE}...")
         subprocess.run([
             str(KEYTOOL_EXE),
             "-genkeypair",
             "-alias", "healdroid",
-            "-keypass", "healdroid2026",
+            "-keypass", ks_password,
             "-keystore", str(PERMANENT_KEYSTORE),
-            "-storepass", "healdroid2026",
+            "-storepass", ks_password,
             "-dname", "CN=HealDroid, OU=Security, O=HealDroid SAST, C=US",
             "-validity", "10000",
             "-keyalg", "RSA",
@@ -442,8 +456,8 @@ public class MainActivity extends Activity {
         "-a", str(unaligned_apk),
         "--ks", str(PERMANENT_KEYSTORE),
         "--ksAlias", "healdroid",
-        "--ksPass", "healdroid2026",
-        "--ksKeyPass", "healdroid2026",
+        "--ksPass", ks_password,
+        "--ksKeyPass", ks_password,
         "--allowResign",
         "-o", str(signed_dir)
     ], check=True)

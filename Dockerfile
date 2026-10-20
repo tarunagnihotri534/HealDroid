@@ -35,8 +35,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 RUN npm run build
 
-# Create storage directory for APK analysis
-RUN mkdir -p /app/storage/jobs
+# Create storage directory for APK analysis and configure non-root user
+RUN mkdir -p /app/storage/jobs \
+    && groupadd -r appuser && useradd -r -g appuser -d /app appuser \
+    && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 3000
 

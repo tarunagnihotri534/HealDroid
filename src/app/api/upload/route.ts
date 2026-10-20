@@ -24,6 +24,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const MAX_FILE_SIZE = 150 * 1024 * 1024; // 150 MB ceiling
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { detail: "APK file exceeds maximum allowed size limit (150 MB)." },
+        { status: 413 }
+      );
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 

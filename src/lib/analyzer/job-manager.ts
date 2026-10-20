@@ -45,7 +45,8 @@ export async function processApkBuffer(
   fileBuffer: Buffer,
   originalFilename: string
 ): Promise<JobResponse> {
-  const jobId = crypto.randomBytes(4).toString("hex");
+  // Cryptographically secure 128-bit identifier to prevent IDOR enumeration
+  const jobId = crypto.randomBytes(16).toString("hex");
   const jobDir = path.join(STORAGE_ROOT, jobId);
   if (!fs.existsSync(jobDir)) {
     fs.mkdirSync(jobDir, { recursive: true });
@@ -79,6 +80,10 @@ export async function processApkBuffer(
       decompilation_warnings: [],
     },
   };
+  if (JOBS.size >= 200) {
+    const oldestKey = JOBS.keys().next().value;
+    if (oldestKey) JOBS.delete(oldestKey);
+  }
   JOBS.set(jobId, initialJob);
 
   try {

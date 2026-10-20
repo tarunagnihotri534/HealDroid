@@ -48,17 +48,26 @@ def count_java_files(directory: Path) -> int:
 def _extract_raw_java_source(apk_path: Path, output_dir: Path) -> int:
     """
     Fallback: extracts .java files if the APK archive is a source bundle.
+    Guarded against Zip Slip path traversal (CWE-22).
     """
     count = 0
     sources_dir = output_dir / "sources"
+    resolved_sources_dir = sources_dir.resolve()
     with zipfile.ZipFile(apk_path, "r") as z:
         for name in z.namelist():
-            if name.endswith(".java"):
-                # Avoid zip-slip
-                p = Path(name)
-                dest = sources_dir / p
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                with z.open(name) as src, open(dest, "wb") as dst:
+            if name.endswith(".java") or name.endswith(".kt") or name.endswith(".smali"):
+                # Prevent Zip Slip: strip leading slashes and verify canonical destination
+                clean_name = name.lstrip("/\\")
+                target_path = (sources_dir / clean_name).resolve()
+                try:
+                    if not target_path.is_relative_to(resolved_sources_dir):
+                        continue
+                except AttributeError:
+                    if not str(target_path).startswith(str(resolved_sources_dir)):
+                        continue
+
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                with z.open(name) as src, open(target_path, "wb") as dst:
                     dst.write(src.read())
                 count += 1
     return count
