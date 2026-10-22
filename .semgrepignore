@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+mobile/node_modules/
+vendor/
+
+# Frontend builds and caches
+.next/
+dist/
+out/
+build/
+.expo/
+.vite/
+
+# Python caches and test artifacts
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/tests/tmp_test_*/
+
+# HealDroid decompiled outputs and job storage
+storage/
+**/storage/**
+**/decompiled/**
+
+# Decompiler binaries, logs, crash dumps, and mobile packages
+tools/jadx/
+*.apk
+*.dmp
+*.log

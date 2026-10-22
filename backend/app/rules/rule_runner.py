@@ -8,11 +8,12 @@ from backend.app.rules.code_rules import run_code_rules
 def run_all_rules(
     manifest_data: Optional[ManifestData], 
     code_files_iter: Iterator[Dict[str, Any]],
-    rules_json_path: Optional[Path | str] = None
+    rules_json_path: Optional[Path | str] = None,
+    timeout_seconds: Optional[float] = 60.0
 ) -> List[Finding]:
     """
     Top-level rule orchestrator.
-    Runs all manifest security checks and decompiled code scanning rules.
+    Runs all manifest security checks and decompiled code scanning rules with timeout protection.
     Returns combined list of Findings.
     """
     findings: List[Finding] = []
@@ -22,7 +23,7 @@ def run_all_rules(
     findings.extend(manifest_findings)
     
     # 2. Code-based rules
-    code_findings = run_code_rules(code_files_iter, rules_json_path=rules_json_path)
+    code_findings = run_code_rules(code_files_iter, rules_json_path=rules_json_path, timeout_seconds=timeout_seconds)
     findings.extend(code_findings)
     
     return findings

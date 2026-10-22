@@ -1,0 +1,42 @@
+{
+  "oauthlint.enabled": false,
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/mobile/node_modules/**": true,
+    "**/.next/**": true,
+    "**/dist/**": true,
+    "**/out/**": true,
+    "**/build/**": true,
+    "**/.expo/**": true,
+    "**/__pycache__/**": true,
+    "**/.pytest_cache/**": true,
+    "**/storage/**": true,
+    "**/decompiled/**": true,
+    "**/backend/tests/tmp_test_*/**": true,
+    "**/tools/jadx/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/mobile/node_modules": true,
+    "**/.next": true,
+    "**/dist": true,
+    "**/out": true,
+    "**/build": true,
+    "**/.expo": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/storage": true,
+    "**/decompiled": true,
+    "**/backend/tests/tmp_test_*": true,
+    "**/tools/jadx": true
+  },
+  "files.exclude": {
+    "**/.git": true,
+    "**/.DS_Store": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/*.pyc": true
+  }
+}

@@ -21,6 +21,15 @@ DEFAULT_EXCLUDE_DIR_NAMES = {
     "j$",
     "bouncycastle",
     "protobuf",
+    "node_modules",
+    ".next",
+    "dist",
+    "out",
+    ".expo",
+    "__pycache__",
+    ".pytest_cache",
+    "storage",
+    "tmp_test_pipeline",
 }
 
 VENDOR_SDK_EXCLUDES = [
@@ -52,12 +61,13 @@ class CodeExtractor:
     def iter_files(
         self, 
         exclude_packages: Optional[list[str]] = None,
-        max_files: int = 3000
+        max_files: int = 3000,
+        max_file_size_bytes: int = 2 * 1024 * 1024
     ) -> Iterator[Dict[str, Any]]:
         """
         Yields { "file_path": str, "relative_path": str, "file_type": "java" | "smali", "content": str }
         one file at a time across both decompiled Java and Smali trees.
-        Filters out framework/runtime noise packages by default.
+        Filters out framework/runtime noise packages by default and enforces a 2MB per-file memory ceiling.
         """
         if not self.decompiled_dir.exists():
             return
@@ -101,6 +111,8 @@ class CodeExtractor:
                         continue
 
                     try:
+                        if os.path.getsize(full_path) > max_file_size_bytes:
+                            continue
                         with open(full_path, "r", encoding="utf-8", errors="replace") as f:
                             content = f.read()
                     except Exception:
@@ -128,7 +140,8 @@ class CodeExtractor:
         for root in search_roots:
             if not root.exists():
                 continue
-            for dirpath, _, filenames in os.walk(str(root)):
+            for dirpath, dirnames, filenames in os.walk(str(root)):
+                dirnames[:] = [d for d in dirnames if d not in DEFAULT_EXCLUDE_DIR_NAMES]
                 for filename in filenames:
                     ext = os.path.splitext(filename)[1].lower()
                     if ext in (".java", ".smali"):

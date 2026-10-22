@@ -15,3 +15,5 @@ __pycache__/
 .pytest_cache/
 backend/tests/tmp_test_*/
 *.tsbuildinfo
+*.dmp
+decompiled/

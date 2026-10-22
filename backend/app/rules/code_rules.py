@@ -1,4 +1,5 @@
 import re
+import time
 import json
 from pathlib import Path
 from typing import Iterator, Dict, Any, List, Optional
@@ -20,10 +21,12 @@ def _extract_line_snippet(content: str, match_pos: int, max_len: int = 150) -> s
 
 def run_code_rules(
     code_files_iter: Iterator[Dict[str, Any]], 
-    rules_json_path: Optional[Path | str] = None
+    rules_json_path: Optional[Path | str] = None,
+    timeout_seconds: Optional[float] = 60.0
 ) -> List[Finding]:
     """
     Executes regex and compound code security rules across decompiled source files.
+    Enforces a timeout_seconds limit (default: 60s) to prevent memory exhaustion and hanging scans.
     """
     rules_path = Path(rules_json_path) if rules_json_path else DEFAULT_RULES_PATH
     
@@ -47,8 +50,11 @@ def run_code_rules(
 
     findings: List[Finding] = []
     seen_keys = set()
+    start_time = time.time()
 
     for file_info in code_files_iter:
+        if timeout_seconds is not None and (time.time() - start_time) > timeout_seconds:
+            break
         rel_path = file_info.get("relative_path", "")
         content = file_info.get("content", "")
         if not content:
